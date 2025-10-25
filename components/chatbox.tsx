@@ -25,93 +25,162 @@ export default function Chatbox() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatHistoria, isLoading]);
 
-  const handleUserMessage = async (content: string) => {
-    const userMessage: Message = {
-      role: 'user',
-      content,
-      timestamp: new Date(),
-    };
+  // ===================================================================
+  // ASYNC HANDLERS - Mejores prácticas con async/await y early returns
+  // ===================================================================
 
-    setError("");
-    setChatHistoria([...chatHistoria, userMessage]);
+  /**
+   * Handler principal de mensajes del usuario
+   * Coordina entre flujo de leads (hardcode) y respuestas de IA
+   */
+  const handleUserMessage = async (content: string): Promise<void> => {
+    try {
+      const userMessage: Message = {
+        role: 'user',
+        content,
+        timestamp: new Date(),
+      };
 
-    // Actualizar conversación en el flujo de leads
-    const updatedConversacion = [...leadFlowState.conversacion, `Cliente: ${content}`];
-    
-    // Verificar si estamos en un flujo activo de captura de leads
-    if (leadFlowState.step !== 'idle' && leadFlowState.step !== 'completed') {
-      // Procesar respuesta dentro del flujo
-      const { newState, botResponse, shouldSendLead, validationError } = 
-        leadFlowService.current.processUserResponse(content, {
-          ...leadFlowState,
-          conversacion: updatedConversacion,
-        });
+      setError("");
+      setChatHistoria(prev => [...prev, userMessage]);
 
-      setLeadFlowState(newState);
-
-      if (validationError) {
-        // Mostrar error de validación
-        const errorMsg: Message = {
-          role: 'assistant',
-          content: validationError,
-          timestamp: new Date(),
-        };
-        setChatHistoria(prev => [...prev, errorMsg]);
+      const updatedConversacion = [
+        ...leadFlowState.conversacion, 
+        `Cliente: ${content}`
+      ];
+      
+      setLeadFlowState(prev => ({
+        ...prev,
+        conversacion: updatedConversacion,
+      }));
+      
+      console.log('🔍 [DEBUG] Estado del flujo:', leadFlowState.step);
+      console.log('🔍 [DEBUG] Mensaje del usuario:', content);
+      
+      // Verificar si estamos en un flujo activo de captura de leads
+      if (leadFlowState.step !== 'idle' && leadFlowState.step !== 'completed') {
+        await handleLeadFlowResponse(content, updatedConversacion);
         return;
       }
 
-      if (botResponse) {
-        // Mostrar respuesta del flujo
-        const flowMsg: Message = {
-          role: 'assistant',
-          content: botResponse,
-          timestamp: new Date(),
-        };
-        setChatHistoria(prev => [...prev, flowMsg]);
-
-        // Si debe enviar el lead, hacerlo
-        if (shouldSendLead) {
-          await sendLeadToAPI(newState);
-        }
+      // Detectar intención de compra
+      if (leadFlowState.step === 'idle') {
+        const intentDetected = await handleIntentDetection(content, updatedConversacion);
+        if (intentDetected) return;
       }
 
-      return; // No continuar con el flujo normal de IA
+      // Flujo normal con IA
+      await handleAIResponse(content);
+    } catch (error) {
+      console.error('[Chatbox] Error en handleUserMessage:', error);
+      setError(error instanceof Error ? error.message : 'Error desconocido');
+    }
+  };
+
+  /**
+   * Maneja respuestas dentro del flujo de captura de leads
+   * Lógica 100% hardcoded con validaciones
+   */
+  const handleLeadFlowResponse = async (
+    content: string, 
+    conversacion: string[]
+  ): Promise<void> => {
+    console.log('✅ [HARDCODE] Flujo activo - Procesando con lógica hardcoded');
+    
+    const { newState, botResponse, shouldSendLead, validationError } = 
+      leadFlowService.current.processUserResponse(content, {
+        ...leadFlowState,
+        conversacion,
+      });
+
+    setLeadFlowState(newState);
+
+    // Early return si hay error de validación
+    if (validationError) {
+      console.log('⚠️ [HARDCODE] Error de validación:', validationError);
+      const errorMsg: Message = {
+        role: 'assistant',
+        content: validationError,
+        timestamp: new Date(),
+      };
+      setChatHistoria(prev => [...prev, errorMsg]);
+      return;
     }
 
-    // Detectar intención de compra
-    if (leadFlowState.step === 'idle') {
-      const hasIntent = leadFlowService.current.detectPurchaseIntent(content);
-      
-      if (hasIntent) {
-        // Iniciar flujo de captura
-        const nextQuestion = leadFlowService.current.getNextQuestion('idle', leadFlowState);
-        
-        if (nextQuestion) {
-          const newFlowState: LeadFlowState = {
-            step: nextQuestion.step,
-            data: {
-              proyecto: leadFlowService.current.extractProjectDescription(updatedConversacion),
-            },
-            conversacion: updatedConversacion,
-            startedAt: new Date(),
-          };
-          
-          setLeadFlowState(newFlowState);
-          
-          // Mostrar pregunta del flujo
-          const flowMsg: Message = {
-            role: 'assistant',
-            content: nextQuestion.question,
-            timestamp: new Date(),
-          };
-          setChatHistoria(prev => [...prev, flowMsg]);
-          
-          return; // No enviar a la IA
-        }
+    // Mostrar respuesta del flujo si existe
+    if (botResponse) {
+      console.log('💬 [HARDCODE] Respuesta del flujo:', botResponse);
+      const flowMsg: Message = {
+        role: 'assistant',
+        content: botResponse,
+        timestamp: new Date(),
+      };
+      setChatHistoria(prev => [...prev, flowMsg]);
+    }
+
+    // Enviar lead si está completo
+    if (shouldSendLead) {
+      console.log('📧 [HARDCODE] Enviando lead al API...');
+      try {
+        await sendLeadToAPI(newState);
+      } catch (error) {
+        console.error('[HARDCODE] Error al enviar lead:', error);
+        setError('Hubo un problema al guardar tu información, pero me pondré en contacto.');
       }
     }
+  };
 
-    // Flujo normal con IA
+  /**
+   * Detecta intención de compra e inicia flujo de captura
+   * Retorna true si se activó el flujo
+   */
+  const handleIntentDetection = async (
+    content: string,
+    conversacion: string[]
+  ): Promise<boolean> => {
+    const hasIntent = leadFlowService.current.detectPurchaseIntent(
+      content, 
+      conversacion
+    );
+    
+    console.log('🔍 [DEBUG] ¿Detecta intención de compra?:', hasIntent);
+    
+    if (!hasIntent) return false;
+
+    console.log('🎯 [HARDCODE] Intención detectada - Iniciando flujo de captura');
+    
+    const nextQuestion = leadFlowService.current.getNextQuestion('idle', leadFlowState);
+    
+    if (!nextQuestion) return false;
+
+    const newFlowState: LeadFlowState = {
+      step: nextQuestion.step,
+      data: {
+        proyecto: leadFlowService.current.extractProjectDescription(conversacion),
+      },
+      conversacion,
+      startedAt: new Date(),
+    };
+    
+    setLeadFlowState(newFlowState);
+    
+    console.log('💬 [HARDCODE] Pregunta inicial:', nextQuestion.question);
+    
+    const flowMsg: Message = {
+      role: 'assistant',
+      content: nextQuestion.question,
+      timestamp: new Date(),
+    };
+    setChatHistoria(prev => [...prev, flowMsg]);
+    
+    return true;
+  };
+
+  /**
+   * Maneja respuesta de IA con streaming
+   */
+  const handleAIResponse = async (content: string): Promise<void> => {
+    console.log('🤖 [IA] Enviando mensaje a OpenAI...');
     setIsLoading(true);
 
     try {
@@ -142,6 +211,8 @@ export default function Chatbox() {
       let fullResponse = '';
 
       if (reader) {
+        console.log('🤖 [IA] Recibiendo respuesta en streaming...');
+        
         // Agregar mensaje vacío para IA que se irá llenando
         const tempMessage: Message = {
           role: "assistant",
@@ -152,7 +223,10 @@ export default function Chatbox() {
 
         while (true) {
           const { done, value } = await reader.read();
-          if (done) break;
+          if (done) {
+            console.log('✅ [IA] Respuesta completa recibida');
+            break;
+          }
 
           const chunk = decoder.decode(value);
           fullResponse += chunk;
@@ -184,40 +258,47 @@ export default function Chatbox() {
     } finally {
       setIsLoading(false);
     }
-  }
+  };
 
-  const sendLeadToAPI = async (flowState: LeadFlowState) => {
-    try {
-      const { nombre, email, telefono, proyecto } = flowState.data;
-      
-      if (!nombre || !email || !proyecto) {
-        console.error('[Chatbox] Datos incompletos para enviar lead');
-        return;
-      }
-
-      const response = await fetch('/api/lead', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nombre,
-          email,
-          telefono,
-          proyecto,
-          conversacion: flowState.conversacion,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Error al enviar la información');
-      }
-
-      console.log('[Chatbox] Lead enviado exitosamente:', result.leadId);
-    } catch (error) {
-      console.error('[Chatbox] Error al enviar lead:', error);
-      setError('Hubo un error al guardar tu información, pero no te preocupes, me pondré en contacto.');
+  /**
+   * Envía lead capturado al API
+   * Manejo robusto de errores con validaciones
+   */
+  const sendLeadToAPI = async (flowState: LeadFlowState): Promise<void> => {
+    const { nombre, email, telefono, proyecto } = flowState.data;
+    
+    // Validación: Datos obligatorios
+    if (!nombre || !email || !proyecto) {
+      const error = 'Datos incompletos para enviar lead';
+      console.error('[Chatbox]', error, { nombre, email, proyecto });
+      throw new Error(error);
     }
+
+    const response = await fetch('/api/lead', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        nombre,
+        email,
+        telefono,
+        proyecto,
+        conversacion: flowState.conversacion,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({
+        error: 'Error desconocido del servidor'
+      }));
+      throw new Error(errorData.error || `HTTP ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('[Chatbox] Lead enviado exitosamente:', result.leadId);
+    
+    return result;
   };
 
   return (

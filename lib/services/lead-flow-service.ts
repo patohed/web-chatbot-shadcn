@@ -4,25 +4,44 @@ import { LeadFlowState, LeadFlowStep } from '@/types/lead-flow';
 export class LeadFlowService {
   
   // Detectar si el usuario muestra intención de compra
-  detectPurchaseIntent(message: string): boolean {
-    const intentKeywords = [
-      'me interesa',
+  detectPurchaseIntent(message: string, conversationContext: string[]): boolean {
+    const messageLower = message.toLowerCase().trim();
+    
+    // Palabras que NO deben activar el flujo (afirmaciones genéricas)
+    const genericAffirmations = ['si', 'ok', 'dale', 'genial', 'perfecto', 'excelente'];
+    if (genericAffirmations.includes(messageLower)) {
+      // Solo activar si hay contexto previo de interés
+      const hasContextualIntent = conversationContext.some(msg => {
+        const msgLower = msg.toLowerCase();
+        return msgLower.includes('contratar') || 
+               msgLower.includes('presupuesto') || 
+               msgLower.includes('agendar') ||
+               msgLower.includes('cita') ||
+               msgLower.includes('reunión');
+      });
+      
+      if (!hasContextualIntent) return false;
+    }
+
+    // Frases explícitas de intención de compra
+    const strongIntentKeywords = [
       'quiero contratar',
+      'necesito contratar',
       'dame presupuesto',
       'cuánto cuesta',
       'cuanto sale',
-      'necesito',
       'quiero avanzar',
-      'haga',
-      'dale',
-      'si',
-      'ok',
-      'perfecto',
-      'excelente'
+      'hagámoslo',
+      'me interesa contratar',
+      'quisiera contratar',
+      'quiero agendar',
+      'agendar una cita',
+      'agendar reunión',
+      'coordinemos',
+      'cuando podemos',
     ];
 
-    const messageLower = message.toLowerCase();
-    return intentKeywords.some(keyword => messageLower.includes(keyword));
+    return strongIntentKeywords.some(keyword => messageLower.includes(keyword));
   }
 
   // Obtener la siguiente pregunta según el paso actual
@@ -180,17 +199,33 @@ export class LeadFlowService {
 
   // Extraer descripción del proyecto de mensajes anteriores
   extractProjectDescription(conversacion: string[]): string {
-    // Buscar mensajes del usuario que contengan descripciones
+    // Buscar mensajes del usuario que contengan descripciones de proyecto
     const userMessages = conversacion
       .filter(msg => msg.startsWith('Cliente:'))
       .map(msg => msg.replace('Cliente:', '').trim());
 
-    // Concatenar mensajes largos (más de 20 caracteres)
-    const descriptions = userMessages
-      .filter(msg => msg.length > 20)
-      .join(' | ');
+    // Palabras clave que indican descripción de proyecto
+    const projectKeywords = [
+      'e-commerce', 'ecommerce', 'tienda', 'página web', 'web', 'aplicación',
+      'app', 'sistema', 'plataforma', 'sitio', 'portal', 'dashboard',
+      'chatbot', 'bot', 'automatización', 'integración', 'api'
+    ];
 
-    return descriptions || 'Sin descripción específica';
+    // Encontrar mensajes que mencionen proyectos
+    const projectMessages = userMessages.filter(msg => {
+      const msgLower = msg.toLowerCase();
+      return projectKeywords.some(keyword => msgLower.includes(keyword)) && msg.length > 15;
+    });
+
+    if (projectMessages.length > 0) {
+      return projectMessages.join(' | ');
+    }
+
+    // Si no encuentra nada específico, concatenar mensajes largos
+    const longMessages = userMessages.filter(msg => msg.length > 20);
+    return longMessages.length > 0 
+      ? longMessages.join(' | ')
+      : 'Proyecto de desarrollo web/software (detalles a confirmar)';
   }
 
   // Crear estado inicial del flujo
