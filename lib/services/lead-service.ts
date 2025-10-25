@@ -21,6 +21,7 @@ export class LeadService {
       proyecto: leadRequest.proyecto,
       telefono: leadRequest.telefono,
       conversacion: leadRequest.conversacion,
+      resumenConversacion: leadRequest.resumenConversacion,
       fechaCreacion: new Date(),
     };
 
@@ -45,11 +46,18 @@ export class LeadService {
       // Guardar
       await fs.writeFile(this.leadsFilePath, JSON.stringify(leads, null, 2), 'utf-8');
 
-      console.log('[LeadService] Lead guardado:', lead.id);
+      console.log('[LeadService] ✅ Lead guardado en archivo:', lead.id);
       return lead;
     } catch (error) {
-      console.error('[LeadService] Error guardando lead:', error);
-      throw new Error('Error al guardar el lead');
+      // En Netlify el filesystem es read-only, así que el archivo no se puede guardar
+      // Pero igual devolvemos el lead para que el email se envíe
+      console.warn('[LeadService] ⚠️ No se pudo guardar en archivo (filesystem read-only en producción)');
+      console.warn('[LeadService] Error:', error instanceof Error ? error.message : error);
+      console.log('[LeadService] ✅ Lead creado (solo en memoria):', lead.id);
+      console.log('[LeadService] 💡 Considera usar Netlify Forms, Supabase o una DB para persistencia en producción');
+      
+      // IMPORTANTE: No lanzar error, devolver el lead para que continúe el flujo
+      return lead;
     }
   }
 
