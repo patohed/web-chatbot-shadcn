@@ -3,20 +3,21 @@
 import { useState, useRef, useEffect } from "react";
 import Mensaje from "./mensaje";
 import ChatForm from "./chat-form";
-import LeadForm from "./lead-form";
-// import ReCAPTCHA from "react-google-recaptcha"; // DESHABILITADO PARA PRUEBAS
 import { BotIcon } from "lucide-react";
 import { Message } from "@/types/domain";
+import { LeadFlowState } from "@/types/lead-flow";
+import { LeadFlowService } from "@/lib/services/lead-flow-service";
 
 export default function Chatbox() {
   const [chatHistoria, setChatHistoria] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
-  const [showLeadForm, setShowLeadForm] = useState<boolean>(false);
-  const [isSubmittingLead, setIsSubmittingLead] = useState<boolean>(false);
-  // const [captchaToken, setCaptchaToken] = useState<string>(""); // DESHABILITADO PARA PRUEBAS
-  // const [showCaptcha, setShowCaptcha] = useState<boolean>(false); // DESHABILITADO PARA PRUEBAS
-  // const recaptchaRef = useRef<ReCAPTCHA>(null); // DESHABILITADO PARA PRUEBAS
+  const [leadFlowState, setLeadFlowState] = useState<LeadFlowState>({
+    step: 'idle',
+    data: {},
+    conversacion: [],
+  });
+  const leadFlowService = useRef(new LeadFlowService());
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll al final cuando hay nuevos mensajes
@@ -24,53 +25,7 @@ export default function Chatbox() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatHistoria, isLoading]);
 
-  // Detectar si el bot está solicitando datos (activar formulario)
-  useEffect(() => {
-    if (chatHistoria.length === 0) return;
-    
-    const ultimoMensajeBot = [...chatHistoria]
-      .reverse()
-      .find(msg => msg.role === 'assistant');
-    
-    if (!ultimoMensajeBot) return;
-    
-    // Palabras clave que indican que el bot quiere cerrar la venta
-    const palabrasClaveCierre = [
-      'necesito algunos datos',
-      'completá tus datos',
-      'para avanzar',
-      'preparar una propuesta',
-      'nombre completo',
-      'tu email',
-      'tu correo',
-      'tu teléfono',
-      'contáctarte',
-    ];
-    
-    const contenidoLower = ultimoMensajeBot.content.toLowerCase();
-    const deberíaMostrarForm = palabrasClaveCierre.some(palabra => 
-      contenidoLower.includes(palabra)
-    );
-    
-    if (deberíaMostrarForm && !showLeadForm) {
-      // Pequeño delay para que se lea el mensaje primero
-      setTimeout(() => setShowLeadForm(true), 1000);
-    }
-  }, [chatHistoria, showLeadForm]);
-
   const handleUserMessage = async (content: string) => {
-    // CAPTCHA DESHABILITADO PARA PRUEBAS
-    // // Mostrar captcha después del primer mensaje
-    // if (chatHistoria.length === 0) {
-    //   setShowCaptcha(true);
-    // }
-
-    // // Validar captcha si está visible
-    // if (showCaptcha && !captchaToken) {
-    //   setError("Por favor, completá el captcha antes de enviar.");
-    //   return;
-    // }
-
     const userMessage: Message = {
       role: 'user',
       content,
@@ -79,6 +34,84 @@ export default function Chatbox() {
 
     setError("");
     setChatHistoria([...chatHistoria, userMessage]);
+
+    // Actualizar conversación en el flujo de leads
+    const updatedConversacion = [...leadFlowState.conversacion, `Cliente: ${content}`];
+    
+    // Verificar si estamos en un flujo activo de captura de leads
+    if (leadFlowState.step !== 'idle' && leadFlowState.step !== 'completed') {
+      // Procesar respuesta dentro del flujo
+      const { newState, botResponse, shouldSendLead, validationError } = 
+        leadFlowService.current.processUserResponse(content, {
+          ...leadFlowState,
+          conversacion: updatedConversacion,
+        });
+
+      setLeadFlowState(newState);
+
+      if (validationError) {
+        // Mostrar error de validación
+        const errorMsg: Message = {
+          role: 'assistant',
+          content: validationError,
+          timestamp: new Date(),
+        };
+        setChatHistoria(prev => [...prev, errorMsg]);
+        return;
+      }
+
+      if (botResponse) {
+        // Mostrar respuesta del flujo
+        const flowMsg: Message = {
+          role: 'assistant',
+          content: botResponse,
+          timestamp: new Date(),
+        };
+        setChatHistoria(prev => [...prev, flowMsg]);
+
+        // Si debe enviar el lead, hacerlo
+        if (shouldSendLead) {
+          await sendLeadToAPI(newState);
+        }
+      }
+
+      return; // No continuar con el flujo normal de IA
+    }
+
+    // Detectar intención de compra
+    if (leadFlowState.step === 'idle') {
+      const hasIntent = leadFlowService.current.detectPurchaseIntent(content);
+      
+      if (hasIntent) {
+        // Iniciar flujo de captura
+        const nextQuestion = leadFlowService.current.getNextQuestion('idle', leadFlowState);
+        
+        if (nextQuestion) {
+          const newFlowState: LeadFlowState = {
+            step: nextQuestion.step,
+            data: {
+              proyecto: leadFlowService.current.extractProjectDescription(updatedConversacion),
+            },
+            conversacion: updatedConversacion,
+            startedAt: new Date(),
+          };
+          
+          setLeadFlowState(newFlowState);
+          
+          // Mostrar pregunta del flujo
+          const flowMsg: Message = {
+            role: 'assistant',
+            content: nextQuestion.question,
+            timestamp: new Date(),
+          };
+          setChatHistoria(prev => [...prev, flowMsg]);
+          
+          return; // No enviar a la IA
+        }
+      }
+    }
+
+    // Flujo normal con IA
     setIsLoading(true);
 
     try {
@@ -153,26 +186,24 @@ export default function Chatbox() {
     }
   }
 
-  const handleLeadSubmit = async (leadData: {
-    nombre: string;
-    email: string;
-    telefono?: string;
-    proyecto: string;
-  }) => {
-    setIsSubmittingLead(true);
-    
+  const sendLeadToAPI = async (flowState: LeadFlowState) => {
     try {
-      // Extraer mensajes relevantes de la conversación
-      const conversacion = chatHistoria.map(msg => 
-        `${msg.role === 'user' ? 'Cliente' : 'Bot'}: ${msg.content}`
-      );
+      const { nombre, email, telefono, proyecto } = flowState.data;
+      
+      if (!nombre || !email || !proyecto) {
+        console.error('[Chatbox] Datos incompletos para enviar lead');
+        return;
+      }
 
       const response = await fetch('/api/lead', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...leadData,
-          conversacion,
+          nombre,
+          email,
+          telefono,
+          proyecto,
+          conversacion: flowState.conversacion,
         }),
       });
 
@@ -182,36 +213,11 @@ export default function Chatbox() {
         throw new Error(result.error || 'Error al enviar la información');
       }
 
-      // Cerrar formulario
-      setShowLeadForm(false);
-
-      // Agregar mensaje de confirmación del bot
-      const confirmacionBot: Message = {
-        role: 'assistant',
-        content: result.message || '¡Perfecto! Recibí toda tu información. Me voy a contactar con vos a la brevedad. ¡Gracias! 🚀',
-        timestamp: new Date(),
-      };
-
-      setChatHistoria(prev => [...prev, confirmacionBot]);
+      console.log('[Chatbox] Lead enviado exitosamente:', result.leadId);
     } catch (error) {
       console.error('[Chatbox] Error al enviar lead:', error);
-      setError(error instanceof Error ? error.message : 'Error al enviar la información');
-    } finally {
-      setIsSubmittingLead(false);
+      setError('Hubo un error al guardar tu información, pero no te preocupes, me pondré en contacto.');
     }
-  };
-
-  const handleLeadCancel = () => {
-    setShowLeadForm(false);
-    
-    // Agregar mensaje indicando que el usuario canceló
-    const mensajeCancelacion: Message = {
-      role: 'assistant',
-      content: 'Entiendo, no hay problema. Si cambiás de opinión, solo decime y retomamos. ¿Hay algo más en lo que pueda ayudarte?',
-      timestamp: new Date(),
-    };
-    
-    setChatHistoria(prev => [...prev, mensajeCancelacion]);
   };
 
   return (
@@ -305,15 +311,6 @@ export default function Chatbox() {
       <div className="px-4 pb-4 pt-2 border-t border-zinc-800/50 bg-zinc-900/30">
         <ChatForm setChatGPT={handleUserMessage} isDisabled={isLoading} />
       </div>
-
-      {/* Lead Form Modal */}
-      {showLeadForm && (
-        <LeadForm
-          onSubmit={handleLeadSubmit}
-          onCancel={handleLeadCancel}
-          isLoading={isSubmittingLead}
-        />
-      )}
     </div>
   );
 }
