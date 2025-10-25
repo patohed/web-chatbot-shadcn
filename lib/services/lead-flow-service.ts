@@ -1,29 +1,22 @@
 // Service para manejar el flujo conversacional de captura de leads
 import { LeadFlowState, LeadFlowStep } from '@/types/lead-flow';
+import { LeadGoalsService } from './lead-goals-service';
 
 export class LeadFlowService {
+  private goalsService: LeadGoalsService;
+  
+  constructor() {
+    this.goalsService = new LeadGoalsService();
+  }
   
   // Detectar si el usuario muestra intención de compra
   detectPurchaseIntent(message: string, conversationContext: string[]): boolean {
     const messageLower = message.toLowerCase().trim();
     
-    // Palabras que NO deben activar el flujo (afirmaciones genéricas)
-    const genericAffirmations = ['si', 'ok', 'dale', 'genial', 'perfecto', 'excelente'];
-    if (genericAffirmations.includes(messageLower)) {
-      // Solo activar si hay contexto previo de interés
-      const hasContextualIntent = conversationContext.some(msg => {
-        const msgLower = msg.toLowerCase();
-        return msgLower.includes('contratar') || 
-               msgLower.includes('presupuesto') || 
-               msgLower.includes('agendar') ||
-               msgLower.includes('cita') ||
-               msgLower.includes('reunión');
-      });
-      
-      if (!hasContextualIntent) return false;
-    }
-
-    // Frases explícitas de intención de compra
+    console.log('🔍 [INTENT-DETECTION] Analizando mensaje:', messageLower);
+    console.log('🔍 [INTENT-DETECTION] Contexto conversación:', conversationContext.slice(-3)); // últimos 3 mensajes
+    
+    // Frases explícitas de intención de compra (PRIORIDAD ALTA)
     const strongIntentKeywords = [
       'quiero contratar',
       'necesito contratar',
@@ -39,9 +32,56 @@ export class LeadFlowService {
       'agendar reunión',
       'coordinemos',
       'cuando podemos',
+      'vamos a avanzar',
+      'quiero empezar',
     ];
 
-    return strongIntentKeywords.some(keyword => messageLower.includes(keyword));
+    // Verificar frases explícitas primero
+    const hasStrongIntent = strongIntentKeywords.some(keyword => messageLower.includes(keyword));
+    if (hasStrongIntent) {
+      console.log('✅ [INTENT-DETECTION] STRONG INTENT detectado:', messageLower);
+      return true;
+    }
+    
+    // Afirmaciones genéricas que podrían indicar intención SI hay contexto
+    const genericAffirmations = ['si', 'sí', 'ok', 'dale', 'genial', 'perfecto', 'excelente'];
+    const isGenericAffirmation = genericAffirmations.some(word => {
+      // Buscar palabra exacta o con espacios alrededor
+      return messageLower === word || 
+             messageLower.includes(' ' + word + ' ') ||
+             messageLower.startsWith(word + ' ') ||
+             messageLower.endsWith(' ' + word);
+    });
+    
+    if (isGenericAffirmation) {
+      console.log('🟡 [INTENT-DETECTION] Afirmación genérica detectada, verificando contexto...');
+      
+      // Buscar contexto previo que indique que el bot ofreció agendar/contratar
+      const hasContextualIntent = conversationContext.some(msg => {
+        const msgLower = msg.toLowerCase();
+        return msgLower.includes('agendar') ||
+               msgLower.includes('llamada') ||
+               msgLower.includes('coordinar') ||
+               msgLower.includes('avanzar') ||
+               msgLower.includes('contratar') || 
+               msgLower.includes('presupuesto') || 
+               msgLower.includes('cita') ||
+               msgLower.includes('reunión') ||
+               msgLower.includes('siguiente paso') ||
+               msgLower.includes('próximo paso');
+      });
+      
+      if (hasContextualIntent) {
+        console.log('✅ [INTENT-DETECTION] Contexto positivo encontrado → ACTIVAR FLUJO');
+        return true;
+      } else {
+        console.log('❌ [INTENT-DETECTION] No hay contexto suficiente → NO activar flujo');
+        return false;
+      }
+    }
+
+    console.log('❌ [INTENT-DETECTION] No se detectó intención de compra');
+    return false;
   }
 
   // Obtener la siguiente pregunta según el paso actual
@@ -67,17 +107,18 @@ export class LeadFlowService {
         };
 
       case 'asking_phone':
-        // Si no hay descripción del proyecto aún, preguntar
-        if (!flowState.data.proyecto || flowState.data.proyecto.length < 10) {
-          return {
-            step: 'asking_project',
-            question: 'Genial. Ahora contame brevemente: ¿en qué consiste tu proyecto?'
-          };
-        }
-        return null;
+        // SIEMPRE preguntar por proyecto después del teléfono
+        return {
+          step: 'asking_project',
+          question: 'Genial. Ahora contame brevemente: ¿en qué consiste tu proyecto?'
+        };
 
       case 'asking_project':
-        return null; // Ya tenemos todo
+        // Después de proyecto, pedir confirmación
+        return {
+          step: 'confirm_send',
+          question: `Perfecto, ${flowState.data.nombre}. Ya tengo tu información. ¿Está completa tu consulta o hay algo más que quieras agregar?`
+        };
 
       default:
         return null;
@@ -105,15 +146,23 @@ export class LeadFlowService {
     let shouldSendLead = false;
     let validationError: string | undefined;
 
+    console.log('\n' + '='.repeat(60));
+    console.log('🎯 [LEAD-FLOW] Procesando step:', currentFlowState.step);
+    console.log('🎯 [LEAD-FLOW] Mensaje usuario:', userMessage.substring(0, 50));
+    console.log('🎯 [LEAD-FLOW] Estado actual:', this.goalsService.debugGoals(currentFlowState));
+    console.log('='.repeat(60) + '\n');
+
     switch (currentFlowState.step) {
       case 'asking_name':
-        // Guardar nombre
-        const nombre = userMessage.trim();
-        if (nombre.length < 2) {
-          validationError = 'Por favor, ingresá un nombre válido.';
+        // Validar goal: nombre
+        const nombreValidation = this.goalsService.validateGoal('nombre', userMessage.trim());
+        if (!nombreValidation.valid) {
+          validationError = nombreValidation.error;
           break;
         }
-        newState.data.nombre = nombre;
+        
+        newState.data.nombre = userMessage.trim();
+        console.log('✅ [GOAL COMPLETADO] Nombre:', newState.data.nombre);
         
         // Siguiente pregunta
         const nextAfterName = this.getNextQuestion('asking_name', newState);
@@ -124,13 +173,15 @@ export class LeadFlowService {
         break;
 
       case 'asking_email':
-        // Validar y guardar email
-        const email = userMessage.trim().toLowerCase();
-        if (!this.isValidEmail(email)) {
-          validationError = 'Ese email no parece válido. ¿Podés verificarlo?';
+        // Validar goal: email
+        const emailValidation = this.goalsService.validateGoal('email', userMessage.trim());
+        if (!emailValidation.valid) {
+          validationError = emailValidation.error;
           break;
         }
-        newState.data.email = email;
+        
+        newState.data.email = userMessage.trim().toLowerCase();
+        console.log('✅ [GOAL COMPLETADO] Email:', newState.data.email);
         
         // Siguiente pregunta
         const nextAfterEmail = this.getNextQuestion('asking_email', newState);
@@ -141,7 +192,7 @@ export class LeadFlowService {
         break;
 
       case 'asking_phone':
-        // Teléfono es opcional
+        // Goal opcional: teléfono
         const userResponseLower = userMessage.toLowerCase();
         
         if (
@@ -150,44 +201,123 @@ export class LeadFlowService {
           userResponseLower.includes('saltar') ||
           userResponseLower.includes('pasar')
         ) {
-          // Usuario no quiere dar teléfono
+          console.log('⏭️  [GOAL SKIPPED] Teléfono: usuario optó por saltear');
           newState.data.telefono = undefined;
         } else {
-          // Guardar teléfono
           newState.data.telefono = userMessage.trim();
+          console.log('✅ [GOAL COMPLETADO] Teléfono:', newState.data.telefono);
         }
         
-        // Siguiente pregunta
+        // SIEMPRE pasar a asking_project (no verificar goals aún)
         const nextAfterPhone = this.getNextQuestion('asking_phone', newState);
         if (nextAfterPhone) {
           newState.step = nextAfterPhone.step;
           botResponse = nextAfterPhone.question;
-        } else {
-          // Ya tenemos todo, enviar lead
-          newState.step = 'completed';
-          botResponse = '¡Perfecto! Ya tengo toda la información. Me voy a contactar con vos a la brevedad para avanzar con tu proyecto. ¡Muchas gracias por tu confianza! 🚀';
-          shouldSendLead = true;
+          console.log('⏭️  [FLOW] Pasando a solicitar descripción del proyecto');
         }
         break;
 
       case 'asking_project':
-        // Guardar descripción del proyecto
-        const proyecto = userMessage.trim();
-        if (proyecto.length < 10) {
-          validationError = 'Por favor, dame un poco más de detalle sobre tu proyecto.';
+        // Validar goal: proyecto
+        const proyectoValidation = this.goalsService.validateGoal('proyecto', userMessage.trim());
+        if (!proyectoValidation.valid) {
+          validationError = proyectoValidation.error;
           break;
         }
-        newState.data.proyecto = proyecto;
         
-        // Ya tenemos todo, enviar lead
-        newState.step = 'completed';
-        botResponse = '¡Perfecto! Ya tengo toda la información. Me voy a contactar con vos a la brevedad para avanzar con tu proyecto. ¡Muchas gracias por tu confianza! 🚀';
-        shouldSendLead = true;
+        newState.data.proyecto = userMessage.trim();
+        console.log('✅ [GOAL COMPLETADO] Proyecto:', newState.data.proyecto);
+        
+        // Verificar que todos los goals obligatorios estén completos
+        if (this.goalsService.canSendLead(newState)) {
+          // ✅ GOALS COMPLETOS - Pasar a CONFIRMACIÓN
+          const nextQuestion = this.getNextQuestion('asking_project', newState);
+          if (nextQuestion) {
+            newState.step = nextQuestion.step;
+            botResponse = nextQuestion.question;
+            shouldSendLead = false; // NO enviar aún, esperar confirmación
+            console.log('🎯 [GOALS] ✅ TODOS LOS GOALS COMPLETADOS - Pasando a confirmación');
+            console.log('🎯 [GOALS] Estado:', this.goalsService.debugGoals(newState));
+          }
+        } else {
+          // Esto no debería pasar, pero por seguridad
+          const missingGoal = this.goalsService.getNextMissingGoal(newState);
+          console.error('⚠️ [GOALS] Falta goal después de proyecto:', missingGoal);
+        }
+        break;
+
+      case 'confirm_send':
+        // Procesar confirmación del usuario (si/no)
+        const confirmLower = userMessage.toLowerCase().trim();
+        
+        // Detección de SÍ (consulta completa)
+        const isYes = (
+          confirmLower === 'si' ||
+          confirmLower === 'sí' ||
+          confirmLower === 'yes' ||
+          confirmLower === 'ok' ||
+          confirmLower === 'dale' ||
+          confirmLower === 'perfecto' ||
+          confirmLower === 'excelente' ||
+          confirmLower === 'completa' ||
+          confirmLower === 'está completa' ||
+          confirmLower === 'esta completa' ||
+          confirmLower === 'por supuesto' ||
+          confirmLower.includes('sí') ||
+          confirmLower.includes('si,') ||
+          confirmLower.includes('completa')
+        );
+        
+        // Detección de NO (quiere agregar más)
+        const isNo = (
+          confirmLower === 'no' ||
+          confirmLower === 'nope' ||
+          confirmLower === 'negativo' ||
+          confirmLower === 'falta' ||
+          confirmLower === 'incompleta' ||
+          confirmLower.includes('no está completa') ||
+          confirmLower.includes('no esta completa') ||
+          confirmLower.includes('no,') ||
+          confirmLower.includes('quiero agregar') ||
+          confirmLower.includes('falta algo') ||
+          confirmLower.includes('hay más')
+        );
+        
+        if (isYes) {
+          // Usuario confirmó que está completa - ENVIAR EMAIL
+          newState.data.confirmSendEmail = true;
+          newState.step = 'completed';
+          botResponse = '¡Perfecto, ' + newState.data.nombre + '! Te envío el email ahora mismo con todos los detalles. Me voy a contactar con vos a la brevedad. ¡Muchas gracias por tu confianza! 🚀';
+          shouldSendLead = true;
+          console.log('✅ [CONFIRMACIÓN] Usuario confirmó (consulta completa) - ENVIANDO EMAIL');
+          console.log('📧 [SEND] Preparando envío a:', newState.data.email);
+        } else if (isNo) {
+          // Usuario quiere agregar más - VOLVER A FLUJO CONVERSACIONAL
+          newState.data.confirmSendEmail = false;
+          newState.step = 'idle'; // Volver a flujo normal
+          botResponse = 'Perfecto, contame qué más querés agregar o consultar. Estoy acá para ayudarte.';
+          shouldSendLead = false;
+          console.log('❌ [CONFIRMACIÓN] Usuario quiere agregar más - Volviendo a flujo conversacional');
+          console.log('💬 [FLOW] Estado vuelve a idle para continuar conversación');
+        } else {
+          // Respuesta ambigua - volver a preguntar
+          validationError = 'Por favor respondé "si" si está completa tu consulta, o "no" si querés agregar algo más.';
+          console.log('⚠️ [CONFIRMACIÓN] Respuesta ambigua, solicitando clarificación');
+        }
         break;
 
       default:
         break;
     }
+
+    console.log('\n' + '-'.repeat(60));
+    console.log('🏁 [LEAD-FLOW] RESULTADO:');
+    console.log('  ➡️ Nuevo step:', newState.step);
+    console.log('  ➡️ Bot response:', botResponse ? botResponse.substring(0, 80) + '...' : '(null)');
+    console.log('  ➡️ shouldSendLead:', shouldSendLead);
+    console.log('  ➡️ validationError:', validationError || '(ninguno)');
+    console.log('  ➡️ Estado goals:', this.goalsService.debugGoals(newState));
+    console.log('-'.repeat(60) + '\n');
 
     return { 
       newState, 

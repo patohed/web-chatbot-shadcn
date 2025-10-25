@@ -3,8 +3,18 @@ import { CloseSaleFactory } from '@/lib/factories/lead-factory';
 import { LeadRequest } from '@/types/lead';
 
 export async function POST(request: NextRequest) {
+  console.log('📨 [API /lead] Recibiendo POST request...');
+  
   try {
     const body: LeadRequest = await request.json();
+    
+    console.log('📋 [API /lead] Payload recibido:', {
+      nombre: body.nombre,
+      email: body.email,
+      telefono: body.telefono || '(no proporcionado)',
+      proyectoLength: body.proyecto?.length || 0,
+      tieneResumen: !!body.resumenConversacion,
+    });
 
     // Validación básica
     if (!body.nombre || !body.email || !body.proyecto) {

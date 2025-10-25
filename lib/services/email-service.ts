@@ -18,11 +18,25 @@ export class EmailService {
 
   async sendLeadNotification(lead: Lead): Promise<{ success: boolean; error?: string }> {
     try {
+      // Resumen de conversación (nuevo)
+      const resumenHTML = lead.resumenConversacion
+        ? `
+          <div style="background: #0f172a; padding: 25px; border-radius: 12px; margin-bottom: 25px; border: 1px solid #10b981;">
+            <h2 style="margin: 0 0 15px 0; color: #10b981; font-size: 18px;">
+              📝 Resumen de la Conversación (IA)
+            </h2>
+            <div style="color: #e5e7eb; font-size: 14px; line-height: 1.7; white-space: pre-wrap;">
+              ${lead.resumenConversacion}
+            </div>
+          </div>
+        `
+        : '';
+      
       const conversacionHTML = lead.conversacion && lead.conversacion.length > 0
         ? `
-          <h3 style="color: #8b5cf6; margin-top: 30px;">📝 Contexto de la conversación:</h3>
-          <div style="background: #1f2937; padding: 20px; border-radius: 8px; border-left: 4px solid #8b5cf6;">
-            ${lead.conversacion.map(msg => `<p style="color: #e5e7eb; margin: 10px 0;">${msg}</p>`).join('')}
+          <h3 style="color: #8b5cf6; margin-top: 30px;">� Conversación Completa:</h3>
+          <div style="background: #1f2937; padding: 20px; border-radius: 8px; border-left: 4px solid #8b5cf6; max-height: 400px; overflow-y: auto;">
+            ${lead.conversacion.map(msg => `<p style="color: #e5e7eb; margin: 10px 0; font-size: 13px;">${msg}</p>`).join('')}
           </div>
         `
         : '';
@@ -96,6 +110,8 @@ export class EmailService {
                       ${lead.proyecto}
                     </p>
                   </div>
+
+                  ${resumenHTML}
 
                   ${conversacionHTML}
 

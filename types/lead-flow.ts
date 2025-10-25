@@ -6,6 +6,7 @@ export type LeadFlowStep =
   | 'asking_email'   // Preguntando email
   | 'asking_phone'   // Preguntando teléfono (opcional)
   | 'asking_project' // Preguntando descripción del proyecto
+  | 'confirm_send'   // NUEVO: Confirmación explícita de envío
   | 'confirming'     // Confirmando datos
   | 'completed';     // Flujo completado
 
@@ -16,6 +17,8 @@ export interface LeadFlowState {
     email?: string;
     telefono?: string;
     proyecto?: string;
+    resumenConversacion?: string; // Resumen generado por IA
+    confirmSendEmail?: boolean; // NUEVO: Usuario confirmó envío de email
   };
   conversacion: string[];
   startedAt?: Date;

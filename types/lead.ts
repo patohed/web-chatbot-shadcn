@@ -7,6 +7,7 @@ export interface Lead {
   telefono?: string;
   fechaCreacion: Date;
   conversacion?: string[]; // Historial de mensajes relevantes
+  resumenConversacion?: string; // Resumen generado por IA
 }
 
 export interface LeadRequest {
@@ -15,6 +16,7 @@ export interface LeadRequest {
   proyecto: string;
   telefono?: string;
   conversacion?: string[];
+  resumenConversacion?: string; // Resumen de la conversación
 }
 
 export interface EmailResponse {
