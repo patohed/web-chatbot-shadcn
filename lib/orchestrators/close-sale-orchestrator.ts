@@ -84,65 +84,34 @@ export class CloseSaleOrchestrator {
       return { triggered: false };
     }
 
-    console.log('✅ [ORCHESTRATOR] Disparador detectado - Activando flujo de cierre');
+    console.log('✅ [ORCHESTRATOR] Disparador detectado - Solicitando confirmación');
 
     // ========================================
-    // NUEVO: Generar resumen con IA (Server Action)
+    // NUEVO: Ir a pending_confirmation en vez de asking_name
     // ========================================
-    console.log('📝 [ORCHESTRATOR] Generando resumen de conversación con IA (server-side)...');
-    
-    let conversationSummary: string | undefined = undefined;
-    
-    try {
-      const summary = await generateConversationSummary(fullMessages);
-      
-      if (summary) {
-        conversationSummary = summary;
-        console.log('✅ [ORCHESTRATOR] Resumen generado exitosamente');
-        console.log('📝 [ORCHESTRATOR] Preview:', summary.substring(0, 100) + '...');
-      } else {
-        console.log('⚠️ [ORCHESTRATOR] No se pudo generar resumen (server action returned null)');
-      }
-    } catch (error) {
-      console.error('❌ [ORCHESTRATOR] Error al generar resumen:', error);
-    }
+    console.log('❓ [ORCHESTRATOR] Preguntando si el usuario quiere coordinar...');
 
-    // Extraer contexto del proyecto (ahora opcional, tenemos el resumen)
-    const proyectoContext = this.leadFlowService.extractProjectDescription(conversationContext);
-
-    // Obtener primera pregunta
-    const firstQuestion = this.leadFlowService.getNextQuestion('idle', currentState);
-
-    // Early return si no hay pregunta (error de configuración)
-    if (!firstQuestion) {
-      console.error('⚠️ [ORCHESTRATOR] Error: No se pudo obtener primera pregunta');
-      return { triggered: false };
-    }
-
-    // Crear estado inicial CON RESUMEN
-    const initialState: LeadFlowState = {
-      step: firstQuestion.step,
-      data: {
-        proyecto: proyectoContext,
-        resumenConversacion: conversationSummary, // NUEVO: Resumen guardado
-      },
+    // Crear estado de confirmación pendiente
+    const confirmationState: LeadFlowState = {
+      step: 'pending_confirmation',
+      data: {},
       conversacion: conversationContext,
       startedAt: new Date(),
     };
 
-    const initialMessage: Message = {
+    const confirmationMessage: Message = {
       role: 'assistant',
-      content: firstQuestion.question,
+      content: '¿Querés que coordinemos una reunión para darte información personalizada sobre tu proyecto? 📅',
       timestamp: new Date(),
     };
 
-    console.log('✅ [ORCHESTRATOR] Estado inicial creado con resumen:', initialState.step);
+    console.log('✅ [ORCHESTRATOR] Estado de confirmación creado');
 
     return {
       triggered: true,
-      initialState,
-      initialMessage,
-      conversationSummary, // Retornar resumen para logging
+      initialState: confirmationState,
+      initialMessage: confirmationMessage,
+      conversationSummary: undefined, // No generamos resumen hasta confirmar
     };
   }
 
@@ -152,7 +121,8 @@ export class CloseSaleOrchestrator {
    */
   async processGoalResponse(
     userMessage: string,
-    currentState: LeadFlowState
+    currentState: LeadFlowState,
+    fullMessages?: Message[] // NUEVO: Para generar resumen después de confirmar
   ): Promise<CloseSaleResult> {
     console.log('🎯 [ORCHESTRATOR] PASO 2-3: Procesando respuesta y validando goals...');
     console.log('📊 [ORCHESTRATOR] Estado actual:', this.goalsService.debugGoals(currentState));
@@ -164,6 +134,39 @@ export class CloseSaleOrchestrator {
       shouldSendLead,
       validationError,
     } = this.leadFlowService.processUserResponse(userMessage, currentState);
+
+    // ========================================
+    // NUEVO: Si usuario confirmó (pending_confirmation → asking_name), generar resumen
+    // ========================================
+    if (
+      currentState.step === 'pending_confirmation' && 
+      newState.step === 'asking_name' &&
+      newState.data.userWantsToSchedule === true &&
+      fullMessages
+    ) {
+      console.log('📝 [ORCHESTRATOR] Usuario confirmó - Generando resumen con IA...');
+      
+      try {
+        const summary = await generateConversationSummary(fullMessages);
+        
+        if (summary) {
+          newState.data.resumenConversacion = summary;
+          console.log('✅ [ORCHESTRATOR] Resumen generado exitosamente');
+          console.log('📝 [ORCHESTRATOR] Preview:', summary.substring(0, 100) + '...');
+        } else {
+          console.log('⚠️ [ORCHESTRATOR] No se pudo generar resumen');
+        }
+      } catch (error) {
+        console.error('❌ [ORCHESTRATOR] Error al generar resumen:', error);
+      }
+
+      // Extraer contexto del proyecto
+      const proyectoContext = this.leadFlowService.extractProjectDescription(currentState.conversacion);
+      if (proyectoContext) {
+        newState.data.proyecto = proyectoContext;
+        console.log('📝 [ORCHESTRATOR] Contexto del proyecto extraído');
+      }
+    }
 
     // Early return si hay error de validación
     if (validationError) {

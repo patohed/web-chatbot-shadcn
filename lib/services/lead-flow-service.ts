@@ -30,10 +30,25 @@ export class LeadFlowService {
       'quiero agendar',
       'agendar una cita',
       'agendar reunión',
+      'agendar reunion', // sin tilde
       'coordinemos',
       'cuando podemos',
       'vamos a avanzar',
       'quiero empezar',
+      'tener una reunión',
+      'tener una reunion', // sin tilde
+      'me gustaría tener una reunión',
+      'me gustaria tener una reunion', // sin tildes
+      'me gustaria tener una reunión', // mixed
+      'quiero una reunión',
+      'quiero una reunion', // sin tilde
+      'necesito una reunión',
+      'necesito una reunion', // sin tilde
+      'podemos reunirnos',
+      'nos reunimos',
+      'charlamos',
+      'hablamos',
+      'conversamos',
     ];
 
     // Verificar frases explícitas primero
@@ -89,6 +104,11 @@ export class LeadFlowService {
     switch (currentStep) {
       case 'detecting':
       case 'idle':
+        // Ya no se usa - ahora idle va a pending_confirmation
+        return null;
+
+      case 'pending_confirmation':
+        // Usuario confirmó que quiere coordinar → preguntar nombre
         return {
           step: 'asking_name',
           question: '¡Excelente! Para avanzar con tu proyecto necesito algunos datos. ¿Cuál es tu nombre completo?'
@@ -153,6 +173,45 @@ export class LeadFlowService {
     console.log('='.repeat(60) + '\n');
 
     switch (currentFlowState.step) {
+      case 'pending_confirmation':
+        // NUEVO: Usuario confirmando si quiere agendar
+        const userResponseConfirmation = userMessage.toLowerCase().trim();
+        
+        if (
+          userResponseConfirmation.includes('si') ||
+          userResponseConfirmation.includes('sí') ||
+          userResponseConfirmation.includes('dale') ||
+          userResponseConfirmation.includes('ok') ||
+          userResponseConfirmation.includes('perfecto') ||
+          userResponseConfirmation.includes('genial') ||
+          userResponseConfirmation.includes('excelente')
+        ) {
+          console.log('✅ [CONFIRMACIÓN] Usuario ACEPTÓ coordinar - Activando flujo completo');
+          newState.data.userWantsToSchedule = true;
+          
+          // Ahora sí pasar a asking_name
+          const nextQuestion = this.getNextQuestion('pending_confirmation', newState);
+          if (nextQuestion) {
+            newState.step = nextQuestion.step;
+            botResponse = nextQuestion.question;
+          }
+        } else if (
+          userResponseConfirmation.includes('no') ||
+          userResponseConfirmation.includes('nop') ||
+          userResponseConfirmation.includes('tampoco') ||
+          userResponseConfirmation.includes('ahora no')
+        ) {
+          console.log('❌ [CONFIRMACIÓN] Usuario RECHAZÓ coordinar - Cancelando flujo');
+          newState.step = 'idle';
+          newState.data.userWantsToSchedule = false;
+          botResponse = '¡Perfecto! Cualquier cosa que necesites, acá estoy para ayudarte. 😊';
+        } else {
+          // Respuesta ambigua, pedir clarificación
+          console.log('❓ [CONFIRMACIÓN] Respuesta ambigua - Solicitando clarificación');
+          botResponse = 'Disculpá, ¿es un sí o un no? ¿Querés que coordinemos la reunión? 📅';
+        }
+        break;
+
       case 'asking_name':
         // Validar goal: nombre
         const nombreValidation = this.goalsService.validateGoal('nombre', userMessage.trim());

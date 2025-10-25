@@ -142,7 +142,8 @@ export default function Chatbox() {
     // Procesar respuesta usando orchestrator
     const result = await closeSaleOrchestrator.current.processGoalResponse(
       content,
-      { ...leadFlowState, conversacion }
+      { ...leadFlowState, conversacion },
+      chatHistoria // NUEVO: Pasar mensajes completos para generar resumen después de confirmar
     );
 
     console.log('\n📦 [CHATBOX] Resultado del orchestrator:');
