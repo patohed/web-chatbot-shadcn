@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Mensaje from "./mensaje";
 import ChatForm from "./chat-form";
+import LeadForm from "./lead-form";
 // import ReCAPTCHA from "react-google-recaptcha"; // DESHABILITADO PARA PRUEBAS
 import { BotIcon } from "lucide-react";
 import { Message } from "@/types/domain";
@@ -11,6 +12,8 @@ export default function Chatbox() {
   const [chatHistoria, setChatHistoria] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
+  const [showLeadForm, setShowLeadForm] = useState<boolean>(false);
+  const [isSubmittingLead, setIsSubmittingLead] = useState<boolean>(false);
   // const [captchaToken, setCaptchaToken] = useState<string>(""); // DESHABILITADO PARA PRUEBAS
   // const [showCaptcha, setShowCaptcha] = useState<boolean>(false); // DESHABILITADO PARA PRUEBAS
   // const recaptchaRef = useRef<ReCAPTCHA>(null); // DESHABILITADO PARA PRUEBAS
@@ -20,6 +23,40 @@ export default function Chatbox() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatHistoria, isLoading]);
+
+  // Detectar si el bot está solicitando datos (activar formulario)
+  useEffect(() => {
+    if (chatHistoria.length === 0) return;
+    
+    const ultimoMensajeBot = [...chatHistoria]
+      .reverse()
+      .find(msg => msg.role === 'assistant');
+    
+    if (!ultimoMensajeBot) return;
+    
+    // Palabras clave que indican que el bot quiere cerrar la venta
+    const palabrasClaveCierre = [
+      'necesito algunos datos',
+      'completá tus datos',
+      'para avanzar',
+      'preparar una propuesta',
+      'nombre completo',
+      'tu email',
+      'tu correo',
+      'tu teléfono',
+      'contáctarte',
+    ];
+    
+    const contenidoLower = ultimoMensajeBot.content.toLowerCase();
+    const deberíaMostrarForm = palabrasClaveCierre.some(palabra => 
+      contenidoLower.includes(palabra)
+    );
+    
+    if (deberíaMostrarForm && !showLeadForm) {
+      // Pequeño delay para que se lea el mensaje primero
+      setTimeout(() => setShowLeadForm(true), 1000);
+    }
+  }, [chatHistoria, showLeadForm]);
 
   const handleUserMessage = async (content: string) => {
     // CAPTCHA DESHABILITADO PARA PRUEBAS
@@ -116,11 +153,66 @@ export default function Chatbox() {
     }
   }
 
-  // DESHABILITADO PARA PRUEBAS
-  // const handleCaptchaChange = (token: string | null) => {
-  //   setCaptchaToken(token || "");
-  //   setError("");
-  // }
+  const handleLeadSubmit = async (leadData: {
+    nombre: string;
+    email: string;
+    telefono?: string;
+    proyecto: string;
+  }) => {
+    setIsSubmittingLead(true);
+    
+    try {
+      // Extraer mensajes relevantes de la conversación
+      const conversacion = chatHistoria.map(msg => 
+        `${msg.role === 'user' ? 'Cliente' : 'Bot'}: ${msg.content}`
+      );
+
+      const response = await fetch('/api/lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...leadData,
+          conversacion,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Error al enviar la información');
+      }
+
+      // Cerrar formulario
+      setShowLeadForm(false);
+
+      // Agregar mensaje de confirmación del bot
+      const confirmacionBot: Message = {
+        role: 'assistant',
+        content: result.message || '¡Perfecto! Recibí toda tu información. Me voy a contactar con vos a la brevedad. ¡Gracias! 🚀',
+        timestamp: new Date(),
+      };
+
+      setChatHistoria(prev => [...prev, confirmacionBot]);
+    } catch (error) {
+      console.error('[Chatbox] Error al enviar lead:', error);
+      setError(error instanceof Error ? error.message : 'Error al enviar la información');
+    } finally {
+      setIsSubmittingLead(false);
+    }
+  };
+
+  const handleLeadCancel = () => {
+    setShowLeadForm(false);
+    
+    // Agregar mensaje indicando que el usuario canceló
+    const mensajeCancelacion: Message = {
+      role: 'assistant',
+      content: 'Entiendo, no hay problema. Si cambiás de opinión, solo decime y retomamos. ¿Hay algo más en lo que pueda ayudarte?',
+      timestamp: new Date(),
+    };
+    
+    setChatHistoria(prev => [...prev, mensajeCancelacion]);
+  };
 
   return (
     <div className="flex flex-col w-full max-w-4xl h-[600px] bg-zinc-950/50 backdrop-blur-sm border border-zinc-800/50 rounded-3xl shadow-2xl shadow-purple-500/5 overflow-hidden">
@@ -150,13 +242,22 @@ export default function Chatbox() {
               Puedo ayudarte con consultas sobre desarrollo web, automatización, chatbots con IA y más. ¿En qué proyecto estás trabajando?
             </p>
             <div className="flex flex-wrap gap-2 justify-center">
-              <button className="px-4 py-2 bg-zinc-900/50 hover:bg-zinc-800/50 border border-zinc-800/50 rounded-full text-sm text-gray-300 transition-all duration-200 hover:border-purple-500/30">
+              <button 
+                onClick={() => handleUserMessage("Hola, estoy interesado en desarrollo web. ¿Qué servicios ofrecés y cuáles son tus especialidades?")}
+                className="px-4 py-2 bg-zinc-900/50 hover:bg-zinc-800/50 border border-zinc-800/50 rounded-full text-sm text-gray-300 transition-all duration-200 hover:border-purple-500/30 hover:scale-105"
+              >
                 💻 Desarrollo web
               </button>
-              <button className="px-4 py-2 bg-zinc-900/50 hover:bg-zinc-800/50 border border-zinc-800/50 rounded-full text-sm text-gray-300 transition-all duration-200 hover:border-purple-500/30">
+              <button 
+                onClick={() => handleUserMessage("Me gustaría crear un chatbot con inteligencia artificial. ¿Qué opciones tengo y cómo funciona?")}
+                className="px-4 py-2 bg-zinc-900/50 hover:bg-zinc-800/50 border border-zinc-800/50 rounded-full text-sm text-gray-300 transition-all duration-200 hover:border-purple-500/30 hover:scale-105"
+              >
                 🤖 Chatbots con IA
               </button>
-              <button className="px-4 py-2 bg-zinc-900/50 hover:bg-zinc-800/50 border border-zinc-800/50 rounded-full text-sm text-gray-300 transition-all duration-200 hover:border-purple-500/30">
+              <button 
+                onClick={() => handleUserMessage("Necesito una auditoría técnica de mi sistema. ¿Qué incluye el servicio y cómo lo realizan?")}
+                className="px-4 py-2 bg-zinc-900/50 hover:bg-zinc-800/50 border border-zinc-800/50 rounded-full text-sm text-gray-300 transition-all duration-200 hover:border-purple-500/30 hover:scale-105"
+              >
                 🔍 Auditoría técnica
               </button>
             </div>
@@ -204,6 +305,15 @@ export default function Chatbox() {
       <div className="px-4 pb-4 pt-2 border-t border-zinc-800/50 bg-zinc-900/30">
         <ChatForm setChatGPT={handleUserMessage} isDisabled={isLoading} />
       </div>
+
+      {/* Lead Form Modal */}
+      {showLeadForm && (
+        <LeadForm
+          onSubmit={handleLeadSubmit}
+          onCancel={handleLeadCancel}
+          isLoading={isSubmittingLead}
+        />
+      )}
     </div>
   );
 }

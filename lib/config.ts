@@ -18,6 +18,11 @@ export const config = {
     maxMessageLength: 2000,
     minMessageLength: 1,
   },
+  email: {
+    resendApiKey: process.env.RESEND_API_KEY || '',
+    from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
+    to: process.env.EMAIL_TO || 'millanpatricio@hotmail.com',
+  },
 } as const;
 
 // Validar que las configuraciones críticas estén presentes

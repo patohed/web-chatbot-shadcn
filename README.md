@@ -7,6 +7,8 @@ Chatbot inteligente con interfaz moderna construido con Next.js 16, OpenAI GPT-4
 - ✅ Chat en tiempo real con streaming de respuestas
 - ✅ Interfaz moderna con tema oscuro
 - ✅ Integración con OpenAI GPT-4o
+- ✅ **Sistema automático de captura de leads**
+- ✅ **Envío de emails con notificación de nuevos clientes**
 - ✅ Rate limiting (10 mensajes/minuto)
 - ✅ Validación de entradas y sanitización
 - ✅ Clean Architecture (Uncle Bob)
@@ -39,6 +41,11 @@ Crear archivo `.env.local` en la raíz del proyecto:
 # OpenAI
 OPENAI_API_KEY=tu-api-key-aqui
 
+# Email - Resend (para sistema de leads)
+RESEND_API_KEY=tu-resend-api-key
+EMAIL_FROM=onboarding@resend.dev
+EMAIL_TO=millanpatricio@hotmail.com
+
 # reCAPTCHA (opcional - deshabilitado por defecto para pruebas)
 NEXT_PUBLIC_RECAPTCHA_SITE_KEY=tu-site-key
 RECAPTCHA_SECRET_KEY=tu-secret-key
@@ -58,6 +65,16 @@ Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
 3. Ve a **API Keys** en el menú
 4. Crea una nueva API key
 5. Cópiala y pégala en tu archivo `.env.local`
+
+## 📧 Configurar Resend para Emails
+
+1. Ve a [resend.com](https://resend.com)
+2. Crea una cuenta (gratis - 3,000 emails/mes)
+3. Ve a **API Keys** y crea una nueva
+4. Agrégala a `.env.local` como `RESEND_API_KEY`
+5. Configura `EMAIL_TO` con el email donde quieras recibir leads
+
+> **Nota**: En desarrollo usa `onboarding@resend.dev`. En producción, verifica tu dominio en Resend.
 
 ## 🎨 Personalización
 
@@ -83,6 +100,17 @@ rateLimit: {
   duration: 60, // Por cada 60 segundos
 }
 ```
+
+## 🎯 Sistema de Captura de Leads
+
+El bot detecta automáticamente cuando un cliente muestra interés y activa un flujo de cierre que:
+
+1. Solicita datos del cliente (nombre, email, teléfono, proyecto)
+2. Muestra un formulario modal elegante
+3. Guarda el lead en `/data/leads.json`
+4. Envía un email detallado con toda la información
+
+**Ver documentación completa**: [SISTEMA-LEADS.md](./SISTEMA-LEADS.md)
 
 ## 📦 Producción
 
