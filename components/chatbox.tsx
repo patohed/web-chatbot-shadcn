@@ -87,16 +87,36 @@ export default function Chatbox() {
       // FLUJO DE CIERRE - Usando Orchestrator (Clean Architecture)
       // ============================================================
 
-      // CASO 1: Flujo activo de captura de leads
-      if (leadFlowState.step !== 'idle' && leadFlowState.step !== 'completed') {
-        console.log('✅ [CHATBOX] FLUJO DE CIERRE ACTIVO - Procesando con orchestrator (NO IA)');
-        await handleActiveCloseSaleFlow(content, updatedConversacion);
-        return;
+      // CASO 1: Flujo activo de captura de leads (cualquier step que NO sea idle)
+      if (leadFlowState.step !== 'idle') {
+        // Si está completed, verificar si ya pasaron 5 minutos para permitir reset
+        if (leadFlowState.step === 'completed' && leadFlowState.completedAt) {
+          const minutesSinceCompletion = (Date.now() - leadFlowState.completedAt.getTime()) / 1000 / 60;
+          if (minutesSinceCompletion >= 5) {
+            console.log('🔄 [CHATBOX] Flujo completado hace más de 5 min - Permitiendo detectar nuevos triggers');
+            // Reset a idle y continuar con detección normal
+            setLeadFlowState({
+              step: 'idle',
+              data: {},
+              conversacion: [],
+            });
+          } else {
+            console.log('⏸️  [CHATBOX] Flujo completado recientemente - Ignorando triggers por', (5 - minutesSinceCompletion).toFixed(1), 'minutos más');
+            // Responder con IA normal, sin detectar triggers
+            await handleAIResponse(content);
+            return;
+          }
+        } else {
+          // Flujo activo normal (pending_confirmation, asking_name, asking_email, etc.)
+          console.log('✅ [CHATBOX] FLUJO DE CIERRE ACTIVO - Procesando con orchestrator (NO IA)');
+          await handleActiveCloseSaleFlow(content, updatedConversacion);
+          return;
+        }
       } else {
-        console.log('🔵 [CHATBOX] Flujo en estado:', leadFlowState.step);
+        console.log('🔵 [CHATBOX] Flujo en estado idle - Buscando triggers');
       }
 
-      // CASO 2: Detectar disparador de intención de cierre
+      // CASO 2: Detectar disparador de intención de cierre (SOLO cuando step === 'idle')
       if (leadFlowState.step === 'idle') {
         const triggerResult = await closeSaleOrchestrator.current.detectTrigger(
           content,
@@ -231,6 +251,15 @@ export default function Chatbox() {
 
       // Success!
       console.log('✅ [CHATBOX] Lead enviado exitosamente:', result.leadId);
+      
+      // IMPORTANTE: Marcar como completado con timestamp
+      // Esto evita que se detecten triggers nuevamente en los próximos minutos
+      console.log('🔄 [CHATBOX] Marcando flujo como completado con timestamp');
+      setLeadFlowState(prev => ({
+        ...prev,
+        step: 'completed',
+        completedAt: new Date(),
+      }));
     } catch (error) {
       console.error('❌ [CHATBOX] Exception al enviar lead:', error);
       const errorMsg: Message = {

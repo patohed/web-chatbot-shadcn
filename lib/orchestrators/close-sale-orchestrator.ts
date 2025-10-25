@@ -66,10 +66,22 @@ export class CloseSaleOrchestrator {
     console.log('📊 [ORCHESTRATOR] Estado actual:', currentState.step);
     console.log('⭐'.repeat(30) + '\n');
     
-    // Early return si ya está en flujo activo
+    // Early return si ya está en flujo activo O si ya completó
     if (currentState.step !== 'idle') {
-      console.log('⏭️  [ORCHESTRATOR] Flujo ya activo, skip detección');
+      console.log('⏭️  [ORCHESTRATOR] Flujo ya activo o completado, skip detección');
+      console.log('📊 [ORCHESTRATOR] Step actual:', currentState.step);
       return { triggered: false };
+    }
+
+    // Early return si completó recientemente (últimos 5 minutos)
+    if (currentState.completedAt) {
+      const minutesSinceCompletion = (Date.now() - currentState.completedAt.getTime()) / 1000 / 60;
+      if (minutesSinceCompletion < 5) {
+        console.log('⏭️  [ORCHESTRATOR] Flujo completado recientemente, ignorando triggers por', (5 - minutesSinceCompletion).toFixed(1), 'minutos más');
+        return { triggered: false };
+      } else {
+        console.log('✅ [ORCHESTRATOR] Completado hace más de 5 min, permitir nuevos triggers');
+      }
     }
 
     // Detectar intención

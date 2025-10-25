@@ -24,4 +24,5 @@ export interface LeadFlowState {
   };
   conversacion: string[];
   startedAt?: Date;
+  completedAt?: Date; // NUEVO: Timestamp de cuando se completó exitosamente
 }
