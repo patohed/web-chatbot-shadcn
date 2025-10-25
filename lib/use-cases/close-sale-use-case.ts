@@ -49,10 +49,12 @@ export class CloseSaleUseCase {
         leadId: lead.id,
       };
     } catch (error) {
-      console.error('[CloseSaleUseCase] Error:', error);
+      console.error('[CloseSaleUseCase] Error completo:', error);
+      console.error('[CloseSaleUseCase] Error message:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('[CloseSaleUseCase] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
       return {
         success: false,
-        error: 'Error interno al procesar el lead',
+        error: `Error interno al procesar el lead: ${error instanceof Error ? error.message : 'Unknown error'}`,
       };
     }
   }
