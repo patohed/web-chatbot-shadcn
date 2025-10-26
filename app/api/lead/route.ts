@@ -35,9 +35,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log('📊 [API /lead] Resultado del caso de uso:', {
+      success: result.success,
+      leadId: result.leadId,
+      emailSent: result.emailSent,
+      hasError: !!result.error,
+    });
+    
+    if (result.error) {
+      console.error('⚠️ [API /lead] WARNING:', result.error);
+    }
+    
     return NextResponse.json({
       success: true,
       leadId: result.leadId,
+      emailSent: result.emailSent,
       message: '¡Perfecto! Recibí toda tu información. Me voy a contactar con vos a la brevedad para discutir tu proyecto en detalle. ¡Gracias por tu interés! 🚀',
     });
   } catch (error) {

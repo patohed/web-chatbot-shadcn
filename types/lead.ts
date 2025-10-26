@@ -23,4 +23,5 @@ export interface EmailResponse {
   success: boolean;
   error?: string;
   leadId?: string;
+  emailSent?: boolean;
 }

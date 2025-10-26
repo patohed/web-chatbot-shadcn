@@ -156,9 +156,12 @@ export class EmailService {
         `,
       };
 
-      await this.transporter.sendMail(mailOptions);
+      console.log('[EmailService] 🚀 Intentando enviar con Gmail SMTP...');
+      const info = await this.transporter.sendMail(mailOptions);
 
       console.log('[EmailService] ✅ Email enviado exitosamente');
+      console.log('[EmailService] 💡 Message ID:', info.messageId);
+      console.log('[EmailService] 💡 Response:', info.response);
       console.log('[EmailService] 💡 Revisa tu bandeja de entrada en:', this.toEmail);
       
       return { success: true };

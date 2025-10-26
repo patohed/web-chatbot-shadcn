@@ -32,21 +32,26 @@ export class CloseSaleUseCase {
       const lead = await this.leadService.saveLead(leadRequest);
 
       // 2. Enviar notificación por email
+      console.log('[CloseSaleUseCase] 📧 Iniciando envío de email...');
       const emailResult = await this.emailService.sendLeadNotification(lead);
 
       if (!emailResult.success) {
-        console.error('[CloseSaleUseCase] Email no enviado, pero lead guardado:', lead.id);
+        console.error('[CloseSaleUseCase] ❌ Email NO enviado, pero lead guardado:', lead.id);
+        console.error('[CloseSaleUseCase] ❌ Error de email:', emailResult.error);
         // Aún así consideramos exitoso porque el lead se guardó
         return {
           success: true,
           leadId: lead.id,
-          error: 'Lead guardado pero el email falló. Revisa los logs.',
+          emailSent: false,
+          error: emailResult.error || 'Lead guardado pero el email falló. Revisa los logs.',
         };
       }
 
+      console.log('[CloseSaleUseCase] ✅ Email enviado exitosamente');
       return {
         success: true,
         leadId: lead.id,
+        emailSent: true,
       };
     } catch (error) {
       console.error('[CloseSaleUseCase] Error completo:', error);
