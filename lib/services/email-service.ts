@@ -1,19 +1,30 @@
-// Infrastructure Layer - Servicio de Email
-import { Resend } from 'resend';
+// Infrastructure Layer - Servicio de Email con Nodemailer
+import nodemailer from 'nodemailer';
 import { Lead } from '@/types/lead';
 
 export class EmailService {
-  private resend: Resend;
+  private transporter: nodemailer.Transporter;
   private fromEmail: string;
   private toEmail: string;
 
   constructor(apiKey: string, fromEmail: string, toEmail: string) {
-    if (!apiKey) {
-      throw new Error('Resend API key is required');
-    }
-    this.resend = new Resend(apiKey);
     this.fromEmail = fromEmail;
     this.toEmail = toEmail;
+
+    // Configurar transporter con Gmail
+    // Nota: Necesitas habilitar "App Passwords" en tu cuenta de Gmail
+    // https://myaccount.google.com/apppasswords
+    this.transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: fromEmail,
+        pass: apiKey, // Aquí va la App Password de Gmail, no la contraseña normal
+      },
+    });
+
+    console.log('[EmailService] ✅ Nodemailer configurado');
+    console.log('[EmailService]   FROM:', fromEmail);
+    console.log('[EmailService]   TO:', toEmail);
   }
 
   async sendLeadNotification(lead: Lead): Promise<{ success: boolean; error?: string }> {
@@ -39,15 +50,16 @@ export class EmailService {
       
       const conversacionHTML = lead.conversacion && lead.conversacion.length > 0
         ? `
-          <h3 style="color: #8b5cf6; margin-top: 30px;">� Conversación Completa:</h3>
+          <h3 style="color: #8b5cf6; margin-top: 30px;">💬 Conversación Completa:</h3>
           <div style="background: #1f2937; padding: 20px; border-radius: 8px; border-left: 4px solid #8b5cf6; max-height: 400px; overflow-y: auto;">
             ${lead.conversacion.map(msg => `<p style="color: #e5e7eb; margin: 10px 0; font-size: 13px;">${msg}</p>`).join('')}
           </div>
         `
         : '';
 
-      await this.resend.emails.send({
-        from: this.fromEmail,
+      // Enviar email con Nodemailer
+      const mailOptions = {
+        from: `"PmDevOps Bot" <${this.fromEmail}>`,
         to: this.toEmail,
         subject: `🎯 Nuevo Lead: ${lead.nombre}`,
         html: `
@@ -142,10 +154,12 @@ export class EmailService {
             </body>
           </html>
         `,
-      });
+      };
 
-      console.log('[EmailService] ✅ Email enviado exitosamente a Resend');
-      console.log('[EmailService] 💡 Revisa tu bandeja de entrada y spam en:', this.toEmail);
+      await this.transporter.sendMail(mailOptions);
+
+      console.log('[EmailService] ✅ Email enviado exitosamente');
+      console.log('[EmailService] 💡 Revisa tu bandeja de entrada en:', this.toEmail);
       
       return { success: true };
     } catch (error) {

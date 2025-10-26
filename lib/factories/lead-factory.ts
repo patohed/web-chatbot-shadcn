@@ -7,24 +7,26 @@ import { EmailService } from '../services/email-service';
 export class CloseSaleFactory {
   static create(): CloseSaleUseCase {
     // Obtener configuración desde variables de entorno
-    const resendApiKey = process.env.RESEND_API_KEY || '';
-    const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev';
-    const toEmail = process.env.EMAIL_TO || 'millanpatricio@hotmail.com';
+    // RESEND_API_KEY ahora es la App Password de Gmail (mantenemos el nombre por compatibilidad)
+    const gmailAppPassword = process.env.RESEND_API_KEY || '';
+    const fromEmail = process.env.EMAIL_FROM || 'patriciomillan10@gmail.com';
+    const toEmail = process.env.EMAIL_TO || 'patriciomillan10@gmail.com';
 
     // Logging detallado para debugging
-    console.log('[CloseSaleFactory] Configuración de Email:');
-    console.log('  - RESEND_API_KEY:', resendApiKey ? `${resendApiKey.substring(0, 10)}...` : '❌ NO CONFIGURADA');
+    console.log('[CloseSaleFactory] Configuración de Email (Nodemailer):');
+    console.log('  - Gmail App Password:', gmailAppPassword ? '✅ Configurada' : '❌ NO CONFIGURADA');
     console.log('  - EMAIL_FROM:', fromEmail);
     console.log('  - EMAIL_TO:', toEmail);
 
     // Validar configuración crítica
-    if (!resendApiKey) {
-      console.error('❌ [CloseSaleFactory] RESEND_API_KEY no está configurada en las variables de entorno');
+    if (!gmailAppPassword) {
+      console.error('❌ [CloseSaleFactory] Gmail App Password no está configurada');
+      console.error('💡 [CloseSaleFactory] Genera una en: https://myaccount.google.com/apppasswords');
     }
 
     // Crear servicios
     const leadService = new LeadService();
-    const emailService = new EmailService(resendApiKey, fromEmail, toEmail);
+    const emailService = new EmailService(gmailAppPassword, fromEmail, toEmail);
 
     // Crear y retornar use case
     return new CloseSaleUseCase(leadService, emailService);
