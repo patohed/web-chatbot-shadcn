@@ -165,15 +165,18 @@ export class EmailService {
     } catch (error) {
       console.error('[EmailService] ❌ Error sending email:', error);
       console.error('[EmailService] Error details:', error instanceof Error ? error.message : 'Unknown');
+      console.error('[EmailService] Stack:', error instanceof Error ? error.stack : 'No stack');
       
-      // Capturar errores específicos de Resend
-      let errorMessage = 'Error desconocido';
+      // Capturar errores específicos
+      let errorMessage = 'Error desconocido al enviar email';
       if (error instanceof Error) {
         errorMessage = error.message;
         
-        // Si es error de validación de dominio
-        if (error.message.includes('domain is not verified') || error.message.includes('validation_error')) {
-          errorMessage = `⚠️ El dominio del email FROM no está verificado en Resend. Ve a https://resend.com/domains para verificar tu dominio o usa un email de un dominio verificado.`;
+        // Errores comunes de Gmail
+        if (error.message.includes('Invalid login') || error.message.includes('Username and Password not accepted')) {
+          errorMessage = '⚠️ Credenciales de Gmail inválidas. Verifica que la App Password sea correcta y que la verificación en 2 pasos esté habilitada.';
+        } else if (error.message.includes('ECONNREFUSED') || error.message.includes('ETIMEDOUT')) {
+          errorMessage = '⚠️ No se pudo conectar al servidor de Gmail. Verifica tu conexión a internet.';
         }
       }
       
