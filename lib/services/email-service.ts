@@ -18,6 +18,11 @@ export class EmailService {
 
   async sendLeadNotification(lead: Lead): Promise<{ success: boolean; error?: string }> {
     try {
+      console.log('[EmailService] 📧 Preparando envío de email...');
+      console.log('[EmailService]   FROM:', this.fromEmail);
+      console.log('[EmailService]   TO:', this.toEmail);
+      console.log('[EmailService]   Lead ID:', lead.id);
+      
       // Resumen de conversación (nuevo)
       const resumenHTML = lead.resumenConversacion
         ? `
@@ -139,12 +144,28 @@ export class EmailService {
         `,
       });
 
+      console.log('[EmailService] ✅ Email enviado exitosamente a Resend');
+      console.log('[EmailService] 💡 Revisa tu bandeja de entrada y spam en:', this.toEmail);
+      
       return { success: true };
     } catch (error) {
-      console.error('[EmailService] Error sending email:', error);
+      console.error('[EmailService] ❌ Error sending email:', error);
+      console.error('[EmailService] Error details:', error instanceof Error ? error.message : 'Unknown');
+      
+      // Capturar errores específicos de Resend
+      let errorMessage = 'Error desconocido';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        
+        // Si es error de validación de dominio
+        if (error.message.includes('domain is not verified') || error.message.includes('validation_error')) {
+          errorMessage = `⚠️ El dominio del email FROM no está verificado en Resend. Ve a https://resend.com/domains para verificar tu dominio o usa un email de un dominio verificado.`;
+        }
+      }
+      
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Error desconocido',
+        error: errorMessage,
       };
     }
   }
