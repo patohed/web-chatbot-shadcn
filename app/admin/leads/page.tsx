@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 /**
@@ -13,7 +13,13 @@ import { createClient } from '@supabase/supabase-js';
  * - ✅ Vista en tiempo real desde Supabase
  * - ✅ Auto-refresh cada 10 segundos
  * - ✅ Búsqueda en tiempo real
+ * 
+ * NOTA: Este es un componente dinámico (no se prerenderiza en build)
+ * para evitar exponer las credenciales de Supabase durante el build.
  */
+
+// Forzar renderizado dinámico (no prerender en build)
+export const dynamic = 'force-dynamic';
 
 interface Lead {
   id: string;
@@ -36,15 +42,33 @@ export default function AdminLeadsPage() {
   const [editedLead, setEditedLead] = useState<Lead | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  
+  // 🔒 Sistema de autenticación simple (temporal hasta implementar login completo)
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState('');
 
-  // Inicializar cliente de Supabase
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  // Inicializar cliente de Supabase dentro del componente
+  const supabase = useMemo(() => {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    
+    if (!url || !key) {
+      console.error('[AdminPanel] ❌ Variables de entorno de Supabase no configuradas');
+      return null;
+    }
+    
+    return createClient(url, key);
+  }, []);
 
   // Función para cargar leads
   const fetchLeads = async () => {
+    if (!supabase) {
+      setError('Variables de entorno de Supabase no configuradas');
+      setLoading(false);
+      return;
+    }
+    
     try {
       setError(null);
       console.log('[AdminPanel] 📥 Cargando leads desde Supabase...');
@@ -71,6 +95,11 @@ export default function AdminLeadsPage() {
 
   // CREATE - Crear nuevo lead
   const createLead = async (newLead: Omit<Lead, 'id' | 'created_at'>) => {
+    if (!supabase) {
+      setError('Variables de entorno de Supabase no configuradas');
+      return false;
+    }
+    
     console.log('[AdminPanel] ➕ Creando nuevo lead...');
     setLoading(true);
     setError(null);
@@ -101,6 +130,11 @@ export default function AdminLeadsPage() {
 
   // UPDATE - Actualizar lead existente
   const updateLead = async (id: string, updates: Partial<Lead>) => {
+    if (!supabase) {
+      setError('Variables de entorno de Supabase no configuradas');
+      return false;
+    }
+    
     console.log('[AdminPanel] ✏️ Actualizando lead:', id);
     setLoading(true);
     setError(null);
@@ -132,6 +166,11 @@ export default function AdminLeadsPage() {
 
   // DELETE - Eliminar lead
   const deleteLead = async (id: string) => {
+    if (!supabase) {
+      setError('Variables de entorno de Supabase no configuradas');
+      return false;
+    }
+    
     console.log('[AdminPanel] 🗑️ Eliminando lead:', id);
     setLoading(true);
     setError(null);
@@ -161,15 +200,52 @@ export default function AdminLeadsPage() {
     }
   };
 
-  // Cargar leads al montar el componente
+  // 🔒 Verificar autenticación al cargar
   useEffect(() => {
-    fetchLeads();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Verificar si ya está autenticado en sessionStorage
+    const auth = sessionStorage.getItem('admin_authenticated');
+    if (auth === 'true') {
+      setIsAuthenticated(true);
+    } else {
+      setLoading(false);
+    }
   }, []);
+
+  // Cargar leads al montar el componente (solo si está autenticado)
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchLeads();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
+
+  // 🔒 Función para validar password
+  const handleAuth = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Password temporal (cambiar por variable de entorno en producción)
+    const adminPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'admin2024';
+    
+    if (password === adminPassword) {
+      setIsAuthenticated(true);
+      sessionStorage.setItem('admin_authenticated', 'true');
+      setAuthError('');
+    } else {
+      setAuthError('Contraseña incorrecta');
+      setPassword('');
+    }
+  };
+
+  // 🚪 Función para cerrar sesión
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    sessionStorage.removeItem('admin_authenticated');
+    setLeads([]);
+  };
 
   // Auto-refresh cada 10 segundos
   useEffect(() => {
-    if (!autoRefresh) return;
+    if (!autoRefresh || !isAuthenticated) return;
 
     const interval = setInterval(() => {
       console.log('[AdminPanel] 🔄 Auto-refresh activado');
@@ -201,6 +277,76 @@ export default function AdminLeadsPage() {
       minute: '2-digit',
     }).format(date);
   };
+
+  // 🔒 Pantalla de login si no está autenticado
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="w-full max-w-md px-6">
+          <div className="bg-gray-900 border border-gray-800 rounded-lg p-8">
+            <div className="text-center mb-8">
+              <div className="inline-block p-3 bg-purple-600/20 rounded-lg mb-4">
+                <svg
+                  className="w-8 h-8 text-purple-500"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                  />
+                </svg>
+              </div>
+              <h1 className="text-2xl font-bold text-white mb-2">
+                Panel de Administración
+              </h1>
+              <p className="text-gray-400 text-sm">
+                Acceso restringido solo para administradores
+              </p>
+            </div>
+
+            <form onSubmit={handleAuth} className="space-y-4">
+              <div>
+                <label className="block text-xs text-gray-500 mb-2">
+                  CONTRASEÑA
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Ingresa la contraseña"
+                  className="w-full px-4 py-3 bg-black text-white rounded-lg border border-gray-800 focus:border-purple-500 focus:outline-none transition-colors"
+                  autoFocus
+                />
+              </div>
+
+              {authError && (
+                <div className="bg-red-950 border border-red-800 rounded-lg p-3">
+                  <p className="text-red-400 text-sm">{authError}</p>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="w-full px-5 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
+              >
+                Ingresar
+              </button>
+            </form>
+
+            <div className="mt-6 pt-6 border-t border-gray-800">
+              <p className="text-xs text-gray-600 text-center">
+                🔒 Página protegida - Solo para administradores autorizados
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -250,6 +396,14 @@ export default function AdminLeadsPage() {
                 className="px-5 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm font-medium transition-colors"
               >
                 ↻ Actualizar
+              </button>
+              
+              <button
+                onClick={handleLogout}
+                className="px-5 py-2.5 bg-red-900 hover:bg-red-800 text-white rounded-lg text-sm font-medium transition-colors"
+                title="Cerrar sesión"
+              >
+                🚪 Salir
               </button>
             </div>
           </div>

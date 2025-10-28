@@ -115,7 +115,18 @@ export class SupabaseService {
       console.log('[SupabaseService] 📋 Leads obtenidos:', data?.length || 0);
       
       // Mapear de snake_case (PostgreSQL) a camelCase (TypeScript)
-      return (data || []).map((row: any) => ({
+      interface SupabaseLeadRow {
+        id: string;
+        nombre: string;
+        email: string;
+        telefono: string;
+        proyecto: string;
+        created_at: string;
+        conversacion: string[];
+        resumen_conversacion: string;
+      }
+      
+      return (data || []).map((row: SupabaseLeadRow) => ({
         id: row.id,
         nombre: row.nombre,
         email: row.email,
