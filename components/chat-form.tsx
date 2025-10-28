@@ -32,36 +32,39 @@ export default function ChatForm({ setChatGPT, isDisabled = false }: ChatFormPro
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="flex gap-3 items-end">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="relative">
         <FormField
           control={form.control}
           name="mensaje"
           render={({ field }) => (
-            <FormItem className="flex-1">
+            <FormItem>
               <FormControl>
-                <Textarea
-                  placeholder="Escribe tu consulta aquí... (Shift + Enter para nueva línea)"
-                  className="min-h-[56px] max-h-[200px] text-gray-100 bg-zinc-900/50 border border-zinc-800/50 rounded-2xl px-4 py-3 resize-none focus-visible:ring-2 focus-visible:ring-purple-500/50 focus-visible:border-purple-500/50 focus-visible:ring-offset-0 placeholder:text-gray-500 transition-all duration-200 hover:border-zinc-700/50"
-                  disabled={isDisabled}
-                  {...field}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey && !isDisabled) {
-                      e.preventDefault();
-                      form.handleSubmit(onSubmit)();
-                    }
-                  }}
-                />
+                <div className="relative">
+                  <Textarea
+                    placeholder="Enviar mensaje..."
+                    className="min-h-[52px] max-h-[200px] pr-12 text-gray-900 dark:text-gray-100 bg-white dark:bg-[#2f2f2f] border border-gray-300 dark:border-[#404040] rounded-xl px-4 py-3 resize-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:focus-visible:ring-emerald-400 focus-visible:border-emerald-500 dark:focus-visible:border-emerald-400 focus-visible:ring-offset-0 placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-all duration-200 hover:border-gray-400 dark:hover:border-[#4a4a4a]"
+                    disabled={isDisabled}
+                    {...field}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey && !isDisabled) {
+                        e.preventDefault();
+                        form.handleSubmit(onSubmit)();
+                      }
+                    }}
+                  />
+                  <Button 
+                    type="submit" 
+                    size="sm"
+                    className="absolute right-2 bottom-2 h-8 w-8 p-0 rounded-lg bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-500 dark:hover:bg-emerald-400 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed border-none shadow-none" 
+                    disabled={isDisabled || !field.value.trim()}
+                  >
+                    <CircleArrowUp className="w-5 h-5" />
+                  </Button>
+                </div>
               </FormControl>
             </FormItem>
           )}
         />
-        <Button 
-          type="submit" 
-          className="h-14 w-14 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 border border-purple-500/30 shadow-lg shadow-purple-500/20" 
-          disabled={isDisabled}
-        >
-          <CircleArrowUp className="w-6 h-6" />
-        </Button>
       </form>
     </Form>
   );

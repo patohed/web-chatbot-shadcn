@@ -1,34 +1,31 @@
 // Factory para crear instancia de CloseSaleUseCase con todas sus dependencias
-// Actualizado con variables de entorno configuradas en Netlify
+// Actualizado para usar Supabase en vez de email
 import { CloseSaleUseCase } from '../use-cases/close-sale-use-case';
 import { LeadService } from '../services/lead-service';
-import { EmailService } from '../services/email-service';
+import { SupabaseService } from '../services/supabase-service';
 
 export class CloseSaleFactory {
   static create(): CloseSaleUseCase {
     // Obtener configuración desde variables de entorno
-    // RESEND_API_KEY ahora es la App Password de Gmail (mantenemos el nombre por compatibilidad)
-    const gmailAppPassword = process.env.RESEND_API_KEY || '';
-    const fromEmail = process.env.EMAIL_FROM || 'patriciomillan10@gmail.com';
-    const toEmail = process.env.EMAIL_TO || 'patriciomillan10@gmail.com';
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
     // Logging detallado para debugging
-    console.log('[CloseSaleFactory] Configuración de Email (Nodemailer):');
-    console.log('  - Gmail App Password:', gmailAppPassword ? '✅ Configurada' : '❌ NO CONFIGURADA');
-    console.log('  - EMAIL_FROM:', fromEmail);
-    console.log('  - EMAIL_TO:', toEmail);
+    console.log('[CloseSaleFactory] Configuración de Supabase:');
+    console.log('  - SUPABASE_URL:', supabaseUrl ? '✅ Configurada' : '❌ NO CONFIGURADA');
+    console.log('  - SUPABASE_ANON_KEY:', supabaseAnonKey ? '✅ Configurada' : '❌ NO CONFIGURADA');
 
     // Validar configuración crítica
-    if (!gmailAppPassword) {
-      console.error('❌ [CloseSaleFactory] Gmail App Password no está configurada');
-      console.error('💡 [CloseSaleFactory] Genera una en: https://myaccount.google.com/apppasswords');
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error('❌ [CloseSaleFactory] Credenciales de Supabase no configuradas');
+      console.error('💡 [CloseSaleFactory] Configura en .env.local y en Netlify');
     }
 
     // Crear servicios
     const leadService = new LeadService();
-    const emailService = new EmailService(gmailAppPassword, fromEmail, toEmail);
+    const supabaseService = new SupabaseService(supabaseUrl, supabaseAnonKey);
 
     // Crear y retornar use case
-    return new CloseSaleUseCase(leadService, emailService);
+    return new CloseSaleUseCase(leadService, supabaseService);
   }
 }

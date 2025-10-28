@@ -1,12 +1,12 @@
 // Application Layer - Caso de uso para cierre de ventas
 import { LeadRequest, EmailResponse } from '@/types/lead';
 import { LeadService } from '../services/lead-service';
-import { EmailService } from '../services/email-service';
+import { SupabaseService } from '../services/supabase-service';
 
 export class CloseSaleUseCase {
   constructor(
     private leadService: LeadService,
-    private emailService: EmailService
+    private supabaseService: SupabaseService
   ) {}
 
   async execute(leadRequest: LeadRequest): Promise<EmailResponse> {
@@ -28,30 +28,29 @@ export class CloseSaleUseCase {
         };
       }
 
-      // 1. Guardar lead en el sistema
+      // 1. Guardar lead en el sistema (archivo local para backup)
       const lead = await this.leadService.saveLead(leadRequest);
 
-      // 2. Enviar notificación por email
-      console.log('[CloseSaleUseCase] 📧 Iniciando envío de email...');
-      const emailResult = await this.emailService.sendLeadNotification(lead);
+      // 2. Guardar lead en Supabase (base de datos en la nube)
+      console.log('[CloseSaleUseCase] � Guardando en Supabase...');
+      const supabaseResult = await this.supabaseService.saveLead(lead);
 
-      if (!emailResult.success) {
-        console.error('[CloseSaleUseCase] ❌ Email NO enviado, pero lead guardado:', lead.id);
-        console.error('[CloseSaleUseCase] ❌ Error de email:', emailResult.error);
-        // Aún así consideramos exitoso porque el lead se guardó
+      if (!supabaseResult.success) {
+        console.error('[CloseSaleUseCase] ❌ Supabase falló:', supabaseResult.error);
+        // Aún así consideramos exitoso porque el lead se guardó localmente
         return {
           success: true,
           leadId: lead.id,
-          emailSent: false,
-          error: emailResult.error || 'Lead guardado pero el email falló. Revisa los logs.',
+          emailSent: false, // Ahora significa "guardado en BD"
+          error: supabaseResult.error || 'Lead guardado localmente pero falló Supabase.',
         };
       }
 
-      console.log('[CloseSaleUseCase] ✅ Email enviado exitosamente');
+      console.log('[CloseSaleUseCase] ✅ Lead guardado en Supabase exitosamente');
       return {
         success: true,
         leadId: lead.id,
-        emailSent: true,
+        emailSent: true, // true = guardado en Supabase
       };
     } catch (error) {
       console.error('[CloseSaleUseCase] Error completo:', error);

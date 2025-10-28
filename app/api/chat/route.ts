@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ChatUseCaseFactory } from '@/lib/factories/chat-factory';
+import { chatRequestSchema, validateSchema, sanitizeUserInput } from '@/lib/schemas/api-schemas';
 import { Message } from '@/types/domain';
 
 // Función helper para obtener identificador del cliente
@@ -23,39 +24,45 @@ function getClientIdentifier(request: NextRequest): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { mensaje, historial = [], captchaToken, clientIp } = body;
-
-    // Validación básica de entrada
-    if (!mensaje || typeof mensaje !== 'string') {
+    
+    // 🛡️ VALIDACIÓN CON ZOD
+    const validation = validateSchema(chatRequestSchema, body);
+    
+    if (!validation.success) {
+      console.warn('⚠️ [API /chat] Validación fallida:', validation.error);
       return NextResponse.json(
-        { error: 'Mensaje inválido' },
+        { error: validation.error },
         { status: 400 }
       );
     }
-
-    if (!captchaToken || typeof captchaToken !== 'string') {
-      return NextResponse.json(
-        { error: 'Token de CAPTCHA requerido' },
-        { status: 400 }
-      );
-    }
+    
+    const validatedData = validation.data;
+    
+    // 🧹 SANITIZACIÓN DEL MENSAJE
+    const sanitizedMessage = sanitizeUserInput(validatedData.mensaje);
+    
+    // 🧹 SANITIZAR HISTORIAL
+    const sanitizedHistorial = validatedData.historial.map(msg => ({
+      ...msg,
+      content: sanitizeUserInput(msg.content),
+    }));
 
     // Construir historial completo (mensajes previos + nuevo mensaje)
     const mensajesCompletos: Message[] = [
-      ...historial, // Mensajes anteriores enviados desde el cliente
+      ...sanitizedHistorial,
       {
         role: 'user',
-        content: mensaje,
+        content: sanitizedMessage,
         timestamp: new Date(),
       }
     ];
 
     // Obtener identificador del cliente
-    const identifier = clientIp || getClientIdentifier(request);
+    const identifier = validatedData.clientIp || getClientIdentifier(request);
 
     // Ejecutar caso de uso con historial completo
     const chatUseCase = ChatUseCaseFactory.create();
-    const result = await chatUseCase.execute(mensajesCompletos, captchaToken, identifier);
+    const result = await chatUseCase.execute(mensajesCompletos, validatedData.captchaToken, identifier);
 
     if (!result.success) {
       return NextResponse.json(

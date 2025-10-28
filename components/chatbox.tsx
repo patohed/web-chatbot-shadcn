@@ -118,6 +118,9 @@ export default function Chatbox() {
 
       // CASO 2: Detectar disparador de intención de cierre (SOLO cuando step === 'idle')
       if (leadFlowState.step === 'idle') {
+        // 🎨 EFECTO "ESCRIBIENDO" antes de activar flujo
+        await showTypingIndicator(1000);
+        
         const triggerResult = await closeSaleOrchestrator.current.detectTrigger(
           content,
           updatedConversacion,
@@ -146,6 +149,29 @@ export default function Chatbox() {
   };
 
   /**
+   * Simula "escribiendo" antes de mostrar un mensaje automático
+   * Mejora UX haciendo que el bot parezca más humano
+   */
+  const showTypingIndicator = async (durationMs: number = 1500): Promise<void> => {
+    const typingMessage: Message = {
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+    };
+    
+    // Mostrar indicador "escribiendo..."
+    setChatHistoria(prev => [...prev, typingMessage]);
+    setIsLoading(true);
+    
+    // Esperar el tiempo especificado
+    await new Promise(resolve => setTimeout(resolve, durationMs));
+    
+    // Remover indicador
+    setChatHistoria(prev => prev.slice(0, -1));
+    setIsLoading(false);
+  };
+
+  /**
    * Maneja el flujo activo de cierre usando el orchestrator
    * Clean async/await sin promises anidadas
    */
@@ -158,6 +184,11 @@ export default function Chatbox() {
     console.log('💬 [CHATBOX] Usuario dijo:', content);
     console.log('📊 [CHATBOX] Step actual:', leadFlowState.step);
     console.log('🔵'.repeat(30) + '\n');
+
+    // 🎨 EFECTO "ESCRIBIENDO" - Simular delay natural
+    const messageLength = content.length;
+    const typingDelay = Math.min(Math.max(messageLength * 20, 800), 2500); // Entre 800ms y 2500ms
+    await showTypingIndicator(typingDelay);
 
     // Procesar respuesta usando orchestrator
     const result = await closeSaleOrchestrator.current.processGoalResponse(
@@ -367,55 +398,84 @@ export default function Chatbox() {
   };
 
   return (
-    <div className="flex flex-col w-full max-w-4xl h-[600px] bg-zinc-950/50 backdrop-blur-sm border border-zinc-800/50 rounded-3xl shadow-2xl shadow-purple-500/5 overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800/50 bg-zinc-900/30">
-        <div className="flex items-center gap-3">
-          <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse shadow-lg shadow-green-500/50"></div>
-          <div>
-            <h3 className="font-semibold text-white">Asistente PmDevOps</h3>
-            <p className="text-xs text-gray-400">Responde en segundos</p>
+    <div className="flex flex-col w-full max-w-4xl h-[85vh] bg-white dark:bg-[#212121] rounded-2xl shadow-2xl overflow-hidden">
+      {/* Header - Estilo ChatGPT */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2f2f2f]">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-cyan-600 flex items-center justify-center">
+            <BotIcon className="w-5 h-5 text-white" />
           </div>
+          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">PmDevOps</span>
         </div>
-        <div className="text-xs text-gray-500">
-          {chatHistoria.length > 0 && `${chatHistoria.length} mensajes`}
-        </div>
+        {chatHistoria.length > 0 && (
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            {chatHistoria.length} {chatHistoria.length === 1 ? 'mensaje' : 'mensajes'}
+          </span>
+        )}
       </div>
 
-      {/* Chat Area */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+      {/* Chat Area - Estilo ChatGPT */}
+      <div className="flex-1 overflow-y-auto">
         {chatHistoria.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-purple-500/30 flex items-center justify-center mb-4">
-              <BotIcon className="w-8 h-8 text-purple-400" />
+          <div className="flex flex-col items-center justify-center h-full px-4">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-400 to-cyan-600 flex items-center justify-center mb-4 shadow-lg">
+              <BotIcon className="w-9 h-9 text-white" />
             </div>
-            <h3 className="text-xl font-semibold text-white mb-2">¡Hola! Soy tu asistente virtual</h3>
-            <p className="text-gray-400 text-sm mb-4 max-w-md">
-              Puedo ayudarte con consultas sobre desarrollo web, automatización, chatbots con IA y más. ¿En qué proyecto estás trabajando?
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">
+              ¿Cómo puedo ayudarte?
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400 text-center mb-8 max-w-md">
+              Especialista en desarrollo web, automatización y chatbots con IA
             </p>
-            <div className="flex flex-wrap gap-2 justify-center">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl">
               <button 
                 onClick={() => handleUserMessage("Hola, estoy interesado en desarrollo web. ¿Qué servicios ofrecés y cuáles son tus especialidades?")}
-                className="px-4 py-2 bg-zinc-900/50 hover:bg-zinc-800/50 border border-zinc-800/50 rounded-full text-sm text-gray-300 transition-all duration-200 hover:border-purple-500/30 hover:scale-105"
+                className="p-4 bg-white dark:bg-[#2f2f2f] hover:bg-gray-50 dark:hover:bg-[#3a3a3a] border border-gray-200 dark:border-[#404040] rounded-xl text-left transition-all duration-200 group"
               >
-                💻 Desarrollo web
+                <div className="text-gray-700 dark:text-gray-300 font-medium mb-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                  Desarrollo Web
+                </div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">
+                  Aplicaciones modernas y escalables
+                </div>
               </button>
               <button 
                 onClick={() => handleUserMessage("Me gustaría crear un chatbot con inteligencia artificial. ¿Qué opciones tengo y cómo funciona?")}
-                className="px-4 py-2 bg-zinc-900/50 hover:bg-zinc-800/50 border border-zinc-800/50 rounded-full text-sm text-gray-300 transition-all duration-200 hover:border-purple-500/30 hover:scale-105"
+                className="p-4 bg-white dark:bg-[#2f2f2f] hover:bg-gray-50 dark:hover:bg-[#3a3a3a] border border-gray-200 dark:border-[#404040] rounded-xl text-left transition-all duration-200 group"
               >
-                🤖 Chatbots con IA
+                <div className="text-gray-700 dark:text-gray-300 font-medium mb-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                  Chatbots con IA
+                </div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">
+                  Asistentes inteligentes personalizados
+                </div>
               </button>
               <button 
                 onClick={() => handleUserMessage("Necesito una auditoría técnica de mi sistema. ¿Qué incluye el servicio y cómo lo realizan?")}
-                className="px-4 py-2 bg-zinc-900/50 hover:bg-zinc-800/50 border border-zinc-800/50 rounded-full text-sm text-gray-300 transition-all duration-200 hover:border-purple-500/30 hover:scale-105"
+                className="p-4 bg-white dark:bg-[#2f2f2f] hover:bg-gray-50 dark:hover:bg-[#3a3a3a] border border-gray-200 dark:border-[#404040] rounded-xl text-left transition-all duration-200 group"
               >
-                🔍 Auditoría técnica
+                <div className="text-gray-700 dark:text-gray-300 font-medium mb-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                  Auditoría Técnica
+                </div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">
+                  Análisis profundo de tu código
+                </div>
+              </button>
+              <button 
+                onClick={() => handleUserMessage("¿Cuáles son tus tarifas y cómo funcionan los presupuestos?")}
+                className="p-4 bg-white dark:bg-[#2f2f2f] hover:bg-gray-50 dark:hover:bg-[#3a3a3a] border border-gray-200 dark:border-[#404040] rounded-xl text-left transition-all duration-200 group"
+              >
+                <div className="text-gray-700 dark:text-gray-300 font-medium mb-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                  Presupuesto
+                </div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">
+                  Información sobre precios y planes
+                </div>
               </button>
             </div>
           </div>
         ) : (
-          <>
+          <div className="w-full">
             {chatHistoria.map((mensaje, index) => (
               <Mensaje
                 key={index}
@@ -424,37 +484,21 @@ export default function Chatbox() {
               />
             ))}
             {isLoading && <Mensaje mensaje="" esIA={true} isLoading={true} />}
-          </>
+            <div ref={chatEndRef} />
+          </div>
         )}
-        <div ref={chatEndRef} />
       </div>
 
       {/* Error Message */}
       {error && (
-        <div className="mx-4 mb-3 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-300 text-sm flex items-start gap-2 animate-in fade-in duration-300">
-          <span className="text-red-400">⚠️</span>
+        <div className="mx-4 mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-lg text-red-600 dark:text-red-300 text-sm flex items-start gap-2">
+          <span>⚠️</span>
           <span>{error}</span>
         </div>
       )}
 
-      {/* Captcha - DESHABILITADO PARA PRUEBAS */}
-      {/* 
-      {showCaptcha && (
-        <div className="flex justify-center mb-3 px-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <div className="p-4 bg-zinc-900/50 border border-zinc-800/50 rounded-2xl">
-            <ReCAPTCHA
-              ref={recaptchaRef}
-              sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || ""}
-              onChange={handleCaptchaChange}
-              theme="dark"
-            />
-          </div>
-        </div>
-      )}
-      */}
-
-      {/* Input Area */}
-      <div className="px-4 pb-4 pt-2 border-t border-zinc-800/50 bg-zinc-900/30">
+      {/* Input Area - Estilo ChatGPT */}
+      <div className="p-4 border-t border-gray-200 dark:border-[#2f2f2f] bg-white dark:bg-[#212121]">
         <ChatForm setChatGPT={handleUserMessage} isDisabled={isLoading} />
       </div>
     </div>

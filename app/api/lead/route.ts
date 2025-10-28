@@ -1,32 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CloseSaleFactory } from '@/lib/factories/lead-factory';
-import { LeadRequest } from '@/types/lead';
+import { leadRequestSchema, validateSchema, sanitizeUserInput, sanitizeEmail } from '@/lib/schemas/api-schemas';
 
 export async function POST(request: NextRequest) {
   console.log('📨 [API /lead] Recibiendo POST request...');
   
   try {
-    const body: LeadRequest = await request.json();
+    const body = await request.json();
     
-    console.log('📋 [API /lead] Payload recibido:', {
-      nombre: body.nombre,
-      email: body.email,
-      telefono: body.telefono || '(no proporcionado)',
-      proyectoLength: body.proyecto?.length || 0,
-      tieneResumen: !!body.resumenConversacion,
-    });
-
-    // Validación básica
-    if (!body.nombre || !body.email || !body.proyecto) {
+    // 🛡️ VALIDACIÓN CON ZOD
+    const validation = validateSchema(leadRequestSchema, body);
+    
+    if (!validation.success) {
+      console.warn('⚠️ [API /lead] Validación fallida:', validation.error);
       return NextResponse.json(
-        { error: 'Nombre, email y proyecto son requeridos' },
+        { error: validation.error },
         { status: 400 }
       );
     }
+    
+    const validatedData = validation.data;
+    
+    // 🧹 SANITIZACIÓN ADICIONAL
+    const sanitizedLead = {
+      nombre: sanitizeUserInput(validatedData.nombre),
+      email: sanitizeEmail(validatedData.email),
+      telefono: validatedData.telefono ? sanitizeUserInput(validatedData.telefono) : undefined,
+      proyecto: sanitizeUserInput(validatedData.proyecto),
+      conversacion: validatedData.conversacion?.map(msg => sanitizeUserInput(msg)),
+      resumenConversacion: validatedData.resumenConversacion ? sanitizeUserInput(validatedData.resumenConversacion) : undefined,
+    };
+    
+    console.log('📋 [API /lead] Payload validado y sanitizado:', {
+      nombre: sanitizedLead.nombre,
+      email: sanitizedLead.email,
+      telefono: sanitizedLead.telefono || '(no proporcionado)',
+      proyectoLength: sanitizedLead.proyecto?.length || 0,
+      tieneResumen: !!sanitizedLead.resumenConversacion,
+    });
 
-    // Ejecutar caso de uso
+    // Ejecutar caso de uso con datos sanitizados
     const closeSaleUseCase = CloseSaleFactory.create();
-    const result = await closeSaleUseCase.execute(body);
+    const result = await closeSaleUseCase.execute(sanitizedLead);
 
     if (!result.success) {
       return NextResponse.json(

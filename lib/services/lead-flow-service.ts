@@ -343,13 +343,13 @@ export class LeadFlowService {
         );
         
         if (isYes) {
-          // Usuario confirmó que está completa - ENVIAR EMAIL
+          // Usuario confirmó que está completa - GUARDAR EN DB
           newState.data.confirmSendEmail = true;
           newState.step = 'completed';
-          botResponse = '¡Perfecto, ' + newState.data.nombre + '! Te envío el email ahora mismo con todos los detalles. Me voy a contactar con vos a la brevedad. ¡Muchas gracias por tu confianza! 🚀';
+          botResponse = '¡Perfecto, ' + newState.data.nombre + '! Guardé toda tu consulta. Me voy a contactar con vos a la brevedad para coordinar los próximos pasos. ¡Muchas gracias por tu confianza! 🚀';
           shouldSendLead = true;
-          console.log('✅ [CONFIRMACIÓN] Usuario confirmó (consulta completa) - ENVIANDO EMAIL');
-          console.log('📧 [SEND] Preparando envío a:', newState.data.email);
+          console.log('✅ [CONFIRMACIÓN] Usuario confirmó (consulta completa) - GUARDANDO EN DB');
+          console.log('� [SAVE] Preparando guardado a Supabase:', newState.data.email);
         } else if (isNo) {
           // Usuario quiere agregar más - VOLVER A FLUJO CONVERSACIONAL
           newState.data.confirmSendEmail = false;

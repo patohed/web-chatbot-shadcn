@@ -96,14 +96,73 @@ export class CloseSaleOrchestrator {
       return { triggered: false };
     }
 
-    console.log('✅ [ORCHESTRATOR] Disparador detectado - Solicitando confirmación');
+    console.log('✅ [ORCHESTRATOR] Disparador detectado');
 
     // ========================================
-    // NUEVO: Ir a pending_confirmation en vez de asking_name
+    // DETECCIÓN INTELIGENTE: ¿IA ya preguntó sobre agendar?
     // ========================================
-    console.log('❓ [ORCHESTRATOR] Preguntando si el usuario quiere coordinar...');
+    const lastBotMessage = fullMessages
+      .filter(m => m.role === 'assistant')
+      .slice(-1)[0]?.content.toLowerCase() || '';
 
-    // Crear estado de confirmación pendiente
+    const aiAlreadyAskedToSchedule = 
+      lastBotMessage.includes('agendar') ||
+      lastBotMessage.includes('llamada') ||
+      lastBotMessage.includes('coordinemos') ||
+      lastBotMessage.includes('reunión') ||
+      lastBotMessage.includes('reunion');
+
+    // Si IA ya preguntó, saltar confirmación redundante
+    if (aiAlreadyAskedToSchedule) {
+      console.log('🎯 [ORCHESTRATOR] IA ya preguntó sobre agendar → Saltar confirmación');
+      console.log('📝 [ORCHESTRATOR] Generando resumen de conversación...');
+
+      // Generar resumen con IA
+      let conversationSummary: string | undefined;
+      try {
+        const summary = await generateConversationSummary(fullMessages);
+        conversationSummary = summary || undefined;
+        if (conversationSummary) {
+          console.log('✅ [ORCHESTRATOR] Resumen generado');
+        }
+      } catch (error) {
+        console.error('❌ [ORCHESTRATOR] Error al generar resumen:', error);
+      }
+
+      // Extraer contexto del proyecto
+      const proyectoContext = this.leadFlowService.extractProjectDescription(conversationContext);
+
+      // Ir directo a asking_name
+      const directState: LeadFlowState = {
+        step: 'asking_name',
+        data: {
+          userWantsToSchedule: true,
+          resumenConversacion: conversationSummary,
+          proyecto: proyectoContext || undefined,
+        },
+        conversacion: conversationContext,
+        startedAt: new Date(),
+      };
+
+      const directMessage: Message = {
+        role: 'assistant',
+        content: '¡Perfecto! Para poder coordinar correctamente, necesito algunos datos. ¿Cuál es tu nombre completo? 😊',
+        timestamp: new Date(),
+      };
+
+      return {
+        triggered: true,
+        initialState: directState,
+        initialMessage: directMessage,
+        conversationSummary,
+      };
+    }
+
+    // ========================================
+    // IA NO preguntó → Pedir confirmación
+    // ========================================
+    console.log('❓ [ORCHESTRATOR] IA no preguntó, solicitando confirmación...');
+
     const confirmationState: LeadFlowState = {
       step: 'pending_confirmation',
       data: {},
@@ -113,7 +172,7 @@ export class CloseSaleOrchestrator {
 
     const confirmationMessage: Message = {
       role: 'assistant',
-      content: '¿Querés que coordinemos una reunión para darte información personalizada sobre tu proyecto? 📅',
+      content: '¡Perfecto! Voy a hacerte algunas preguntas para poder agendarte correctamente. ¿Te parece bien? �',
       timestamp: new Date(),
     };
 
