@@ -44,7 +44,7 @@ OPENAI_API_KEY=tu-api-key-aqui
 # Email - Resend (para sistema de leads)
 RESEND_API_KEY=tu-resend-api-key
 EMAIL_FROM=onboarding@resend.dev
-EMAIL_TO=millanpatricio@hotmail.com
+EMAIL_TO=tumail@hotmail.com
 
 # reCAPTCHA (opcional - deshabilitado por defecto para pruebas)
 NEXT_PUBLIC_RECAPTCHA_SITE_KEY=tu-site-key
