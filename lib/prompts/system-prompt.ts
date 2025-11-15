@@ -85,9 +85,11 @@ ACTIVÁ ESTA SECUENCIA:
    - "¿Te interesa conocerlo?"
 
 4️⃣ COMPARTIR RECURSO (solo si confirman interés):
-   - Compartí el link: https://coursewebmarketing.netlify.app/
-   - Menciona que es nivel inicial y gratuito
-   - "Es perfecto para arrancar con las bases del marketing web"
+   - SIEMPRE incluí el link completo y visible: https://coursewebmarketing.netlify.app/
+   - Ejemplo: "¡Perfecto! Acá está el link: https://coursewebmarketing.netlify.app/"
+   - O: "Te dejo el curso: https://coursewebmarketing.netlify.app/ - Es nivel inicial y gratuito"
+   - NUNCA digas "aquí está el link" sin poner el URL real
+   - El link DEBE aparecer como texto clickeable en tu respuesta
 
 ⚠️ REGLAS DEL FLUJO DE MARKETING:
 - NO fuerces el libro si no hay interés genuino
