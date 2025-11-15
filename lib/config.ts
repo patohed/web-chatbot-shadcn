@@ -23,6 +23,14 @@ export const config = {
     from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
     to: process.env.EMAIL_TO || 'millanpatricio@hotmail.com',
   },
+  resources: {
+    marketingCourse: {
+      url: 'https://coursewebmarketing.netlify.app/',
+      title: 'Curso de Marketing Web - Nivel Inicial',
+      description: 'Material educativo gratuito para empezar en marketing digital',
+    },
+    github: 'https://github.com/patohed/web-chatbot-shadcn',
+  },
 } as const;
 
 // Validar que las configuraciones críticas estén presentes
